@@ -475,7 +475,7 @@ pub fn public_notice_entry(
     })
 }
 
-/// Whether an entry is streamed completion content awaiting its commit.
+/// Whether an entry holds completion content still streaming, not yet committed.
 #[must_use]
 pub fn is_provisional(entry: &Value) -> bool {
     entry["generationStatus"] == "in_progress"

@@ -56,7 +56,7 @@ pub fn reconcile_plugin_routes(
         .collect()
 }
 
-/// Carries the tools a re-pin no longer derives into its catalog. Reference
+/// Keeps in the catalog the tools that a re-pin would otherwise stop deriving. Reference
 /// `retain_pinned_tools`.
 #[must_use]
 pub fn retain_pinned_tools(

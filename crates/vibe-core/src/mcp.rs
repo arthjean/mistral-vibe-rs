@@ -732,10 +732,10 @@ pub fn validate_config(config: &McpServerConfig) -> Result<(), McpError> {
     match &config.transport {
         McpTransportConfig::Http { url, headers }
         | McpTransportConfig::StreamableHttp { url, headers } => {
-            // A plaintext URL on another host is the operator's decision, taken
-            // when the entry was written: `vibe mcp add --allow-insecure-http`
-            // and `/mcp add` refuse it unless told otherwise, and the reference
-            // connects to whatever the configuration names
+            // Whoever wrote the entry already chose to accept a plaintext URL
+            // on a remote host: both the CLI's `mcp add` (without
+            // `--allow-insecure-http`) and the `/mcp add` command reject it by
+            // default, and the reference connects to whatever the configuration names
             // (`vibe/core/config/models.py:367-369`).
             require_web_url(url, "server")?;
             validate_headers(headers)?;

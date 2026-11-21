@@ -317,16 +317,19 @@ fn read_macos_class(
         .replace('\\', "\\\\")
         .replace('"', "\\\"");
     let script = format!(
-        "set targetFile to POSIX file \"{escaped}\"\n\
+        "set outputPath to POSIX file \"{escaped}\"\n\
          try\n\
-             set imgData to the clipboard as «class {four_cc}»\n\
+             get the clipboard as «class {four_cc}»\n\
+             set pictureBytes to result\n\
          on error\n\
              return\n\
          end try\n\
-         set fh to open for access targetFile with write permission\n\
-         set eof of fh to 0\n\
-         write imgData to fh\n\
-         close access fh"
+         set handle to open for access outputPath with write permission\n\
+         try\n\
+             set eof handle to 0\n\
+             write pictureBytes to handle\n\
+         end try\n\
+         close access handle"
     );
     let mut command = Command::new("osascript");
     command.args(["-e", &script]);

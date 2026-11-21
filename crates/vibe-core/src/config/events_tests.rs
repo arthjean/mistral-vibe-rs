@@ -105,7 +105,7 @@ fn a_write_publishes_the_documents_it_moved_between_and_the_reason_given() {
     let config = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     );
@@ -169,7 +169,7 @@ fn a_published_document_carries_no_secret() {
     let config = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     );

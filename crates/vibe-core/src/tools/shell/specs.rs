@@ -133,7 +133,7 @@ pub(super) fn command_spec(family: ShellFamily, managed: bool) -> ToolSpec {
         schema = schema.optional(
             "hard_timeout",
             Property::boolean()
-                .described("Kill the process group when timeout_seconds expires instead of leaving the session running")
+                .described("Once timeout_seconds runs out, end the whole process group rather than leave the session alive")
                 .with_default(false),
         );
     }
@@ -236,13 +236,13 @@ pub(super) fn output_spec(family: ShellFamily) -> ToolSpec {
 /// | Text is sent verbatim, newline included | the `text` description |
 /// | Control keys are named rather than encoded | the `control` description |
 /// | Raw bytes travel as base64 | the `bytes_base64` description |
-/// | Exactly one of the three inputs is supplied | "Supply exactly one of text, control or bytes_base64" |
+/// | Exactly one of the three inputs is supplied | "Provide a single input" |
 pub(super) fn stdin_spec(family: ShellFamily) -> ToolSpec {
     ToolSpec {
         name: family.tool_name("stdin"),
         description: format!(
-            "Write to a running {} session. Supply exactly one of text, control or bytes_base64; \
-             supplying none or several is refused rather than resolved by precedence.",
+            "Write to a running {} session. Provide a single input (text, control or \
+             bytes_base64); a call with none or several is refused, never settled by precedence.",
             family.name()
         ),
         input_schema: ObjectSchema::new()

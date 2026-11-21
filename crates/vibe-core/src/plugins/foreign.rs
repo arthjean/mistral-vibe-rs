@@ -930,7 +930,8 @@ fn resolve_command(root: &Path, original: &str, expanded: &str) -> Result<String
         if original.contains('/') || original.contains('\\') || original == "." || original == ".."
         {
             return Err(
-                "a stdio command has to be a bare executable or a contained path".to_owned(),
+                "a stdio command is either a bare executable name or a path kept inside the plugin"
+                    .to_owned(),
             );
         }
         return Ok(original.to_owned());

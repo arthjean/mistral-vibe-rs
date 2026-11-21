@@ -336,7 +336,7 @@
                         "<bin>/vibe-acp",
                         "--setup"
                       ],
-                      "command": "<bin>/python",
+                      "command": "<bin>/python3",
                       "label": {
                         "prose": 18,
                         "sha256": "4ab4e54febdce455d0daf1d24d7f95ba00df91578bbe3b2ace6dfc72e508d926"
@@ -4088,7 +4088,28 @@
               "sessionId": "<id-1>"
             }
           },
-          "stream": []
+          "stream": [
+            {
+              "after": true,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "content": {
+                      "text": {
+                        "prose": 120,
+                        "sha256": "5e221c8e8780b2f90b2685e8722ae69d0d174b5716ee7952bd8174df89ea6867"
+                      },
+                      "type": "text"
+                    },
+                    "messageId": "<id-2>",
+                    "sessionUpdate": "agent_message_chunk"
+                  }
+                }
+              }
+            }
+          ]
         }
       ],
       "scenario": {
@@ -4115,7 +4136,7 @@
             }
           },
           {
-            "quiet": 3.0,
+            "quiet": 8.0,
             "send": {
               "id": 1,
               "method": "session/new",
@@ -4570,6 +4591,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "List me",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -4584,20 +4627,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "List me",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -4628,20 +4657,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -5191,6 +5206,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Remember this",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -5205,20 +5242,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Remember this",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -5249,20 +5272,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -6322,6 +6331,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Remember this",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -6336,20 +6367,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Remember this",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -6380,20 +6397,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -7239,6 +7242,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Remember this",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -7253,20 +7278,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Remember this",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -7297,20 +7308,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -8241,6 +8238,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "First",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Two",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -8255,20 +8274,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "First",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -8299,20 +8304,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Two",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -9859,6 +9850,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "First",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Two",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -9873,20 +9886,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "First",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -9917,20 +9916,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Two",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -13070,6 +13055,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Say hello",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -13084,20 +13091,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Say hello",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -13145,20 +13138,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -13642,6 +13621,31 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": {
+                    "prose": 32,
+                    "sha256": "e212847600c8b1e79b4c8b681068da925f7e488536fe01e1f70ba8211cc3f62b"
+                  },
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -13656,23 +13660,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": {
-                      "prose": 32,
-                      "sha256": "e212847600c8b1e79b4c8b681068da925f7e488536fe01e1f70ba8211cc3f62b"
-                    },
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -13766,20 +13753,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -14772,6 +14745,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Expanded prompt",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -14786,20 +14781,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Expanded prompt",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -14830,20 +14811,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -15471,6 +15438,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Summarize @notes.txt please",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -15485,20 +15474,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Summarize @notes.txt please",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -15552,20 +15527,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -16078,6 +16039,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Read notes",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -16092,20 +16075,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Read notes",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -16136,20 +16105,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -16673,6 +16628,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Read one line",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -16687,20 +16664,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Read one line",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -16731,20 +16694,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -17270,6 +17219,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Read notes",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -17284,20 +17255,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Read notes",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -17328,20 +17285,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -17859,6 +17802,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Write a file",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -17873,20 +17838,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Write a file",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -17917,20 +17868,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -18452,6 +18389,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Edit a file",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -18466,20 +18425,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Edit a file",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -18608,20 +18553,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -19147,6 +19078,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Search",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -19161,20 +19114,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Search",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -19205,20 +19144,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -19744,6 +19669,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Run a command",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -19758,20 +19705,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Run a command",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -19923,20 +19856,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -20490,6 +20409,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Run twice",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -20504,20 +20445,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Run twice",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -20720,20 +20647,6 @@
                     },
                     "messageId": "<id-5>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -21298,6 +21211,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Search outside",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -21312,20 +21247,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Search outside",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -21356,20 +21277,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -21940,6 +21847,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Read outside",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -21954,20 +21883,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Read outside",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -21998,20 +21913,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -22555,6 +22456,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Run a command",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -22569,20 +22492,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Run a command",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -22759,20 +22668,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -23301,6 +23196,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Run a command",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -23315,20 +23232,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Run a command",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -23505,20 +23408,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -24054,6 +23943,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Read under ask",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -24068,20 +23979,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Read under ask",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -24112,20 +24009,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -24667,6 +24550,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Plan the work",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -24681,20 +24586,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Plan the work",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -24910,20 +24801,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -25470,6 +25347,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Ask me",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -25484,20 +25383,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Ask me",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -25528,20 +25413,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -26107,6 +25978,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Ask me",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -26121,20 +26014,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Ask me",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -26165,20 +26044,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -26737,6 +26602,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Ask me",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -26751,20 +26638,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Ask me",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -26795,20 +26668,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -26910,6 +26769,7 @@
             }
           },
           {
+            "quiet": 3.0,
             "send": {
               "id": 2,
               "method": "session/prompt",
@@ -27373,6 +27233,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Ask me",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -27387,20 +27269,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Ask me",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -27431,20 +27299,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -28941,6 +28795,17 @@
                   "used": 0
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -28954,22 +28819,7 @@
               }
             }
           },
-          "stream": [
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            }
-          ]
+          "stream": []
         }
       ],
       "scenario": {
@@ -29513,6 +29363,17 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Second",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -29540,20 +29401,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Second",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -30058,6 +29905,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "A fairly long first message that becomes the title of the session",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -30072,20 +29941,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "A fairly long first message that becomes the title of the session",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -30116,20 +29971,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -34554,6 +34395,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Hello",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Summary of the conversation",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -34568,20 +34431,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Hello",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -34612,20 +34461,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Summary of the conversation",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -35261,6 +35096,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Continued",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Hello",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -35275,20 +35132,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Hello",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -35319,20 +35162,6 @@
                     },
                     "messageId": "<id-5>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Continued",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -37103,6 +36932,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "/nonexistent thing",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -37117,20 +36968,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "/nonexistent thing",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -37161,20 +36998,6 @@
                     },
                     "messageId": "<id-5>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -37683,6 +37506,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "/greet warmly",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -37697,20 +37542,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "/greet warmly",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -37790,20 +37621,6 @@
                     },
                     "messageId": "<id-4>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -43224,6 +43041,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Hello",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -43238,20 +43077,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Hello",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -43282,20 +43107,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -43920,6 +43731,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Hello",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -43934,20 +43767,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Hello",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -43978,20 +43797,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -44507,7 +44312,7 @@
               "loop": {
                 "id": "<id-3>",
                 "intervalSeconds": 300,
-                "nextFireAt": "<time>",
+                "nextFireAt": "<time:float>",
                 "prompt": "check status"
               }
             }
@@ -44538,7 +44343,7 @@
                 {
                   "id": "<id-3>",
                   "intervalSeconds": 300,
-                  "nextFireAt": "<time>",
+                  "nextFireAt": "<time:float>",
                   "prompt": "check status"
                 }
               ]
@@ -45701,6 +45506,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Change notes",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -45715,20 +45542,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Change notes",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -45759,20 +45572,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }
@@ -46399,6 +46198,28 @@
                   "used": 15
                 }
               }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Change notes",
+                  "updatedAt": "<time>"
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "sessionUpdate": "session_info_update",
+                  "title": "Done.",
+                  "updatedAt": "<time>"
+                }
+              }
             }
           ],
           "response": {
@@ -46413,20 +46234,6 @@
             }
           },
           "stream": [
-            {
-              "after": false,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Change notes",
-                    "updatedAt": "<time>"
-                  }
-                }
-              }
-            },
             {
               "after": false,
               "message": {
@@ -46457,20 +46264,6 @@
                     },
                     "messageId": "<id-3>",
                     "sessionUpdate": "agent_message_chunk"
-                  }
-                }
-              }
-            },
-            {
-              "after": true,
-              "message": {
-                "method": "session/update",
-                "params": {
-                  "sessionId": "<id-1>",
-                  "update": {
-                    "sessionUpdate": "session_info_update",
-                    "title": "Done.",
-                    "updatedAt": "<time>"
                   }
                 }
               }

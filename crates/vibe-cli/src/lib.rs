@@ -190,8 +190,9 @@ pub struct Arguments {
         value_name = "NAME",
         num_args = 0..=1,
         help = "Run in a git worktree kept under the vibe home. With NAME, create the worktree \
-                and a branch called NAME, or reuse the one already there. Without NAME, create \
-                a new one named after the prompt (or a random slug) on a vibe/<name> branch. \
+                and a branch called NAME, or reuse the one already there. Without NAME, make \
+                a fresh one whose name comes from the prompt (or a random slug), on a \
+                vibe/<name> branch. \
                 The session trusts that directory without asking. Ignored with --setup and \
                 --check-upgrade."
     )]
@@ -419,7 +420,7 @@ fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
     }
     if arguments.resume.as_deref() == Some("") && arguments.prompt.is_some() {
         return Err(CliError::InvalidArguments(
-            "--resume requires a session ID in programmatic mode".to_owned(),
+            "--resume needs a session ID when running in programmatic mode".to_owned(),
         ));
     }
     validate_launch_prices(arguments)

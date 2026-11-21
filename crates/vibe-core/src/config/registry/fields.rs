@@ -443,7 +443,7 @@ pub static FIELDS: &[FieldSpec] = &[
     ),
     FieldSpec::declared("vision_model", FieldKind::Complex, SHALLOW_MERGE).published(
         FieldDefault::None,
-        "Image-capable model that describes images for an active model that cannot see them.",
+        "Model with image input that writes descriptions of pictures when the active model has no vision.",
         COMPACTION_MODEL,
     ),
     FieldSpec::declared("utility_models", FieldKind::Complex, SHALLOW_MERGE).published(

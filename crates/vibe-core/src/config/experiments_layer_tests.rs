@@ -337,7 +337,7 @@ fn composed(
 ) -> ConfigSnapshot {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let working = temporary.path().join("project");
+    let working = temporary.path().join("home/project");
     fs::create_dir_all(&home).expect("home directory");
     fs::create_dir_all(working.join(PROJECT_DIRECTORY)).expect("project directory");
     if !user.is_empty() {

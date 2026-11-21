@@ -149,7 +149,7 @@ fn every_invalid_entry_is_reported_under_its_name_and_the_rest_load() {
             "5 - name: Input should be a valid string",
             "bad_type - type: Input should be 'post_agent', 'pre_tool' or 'post_tool'",
             "empty_command - command: Value error, command must not be empty",
-            "agent_match - hook: Value error, match is only valid for tool hooks (pre_tool / \
+            "agent_match - hook: Value error, match applies to tool hooks alone (pre_tool / \
              post_tool)",
             "bad_timeout - timeout: Input should be a valid number, unable to parse string as a \
              number",

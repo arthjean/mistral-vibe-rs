@@ -261,7 +261,7 @@ pub fn evaluate(javascript: &str, facts: &Facts) -> Result<Evaluation, Stopped> 
     } else {
         Settled::Threw(json!({
             "name": "ExecutionError",
-            "message": "TypeScript execution did not settle; unresolved promises are not supported",
+            "message": "The TypeScript program never settled: a promise left unresolved is not supported",
         }))
     };
     Ok(Evaluation {

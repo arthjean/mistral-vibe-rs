@@ -123,8 +123,8 @@ inside the plugin.
 - `stdio` servers name either a bare executable found on `PATH` or a path
   starting with `./` that stays inside the plugin. `${PLUGIN_ROOT}` and
   `${PLUGIN_DATA}` expand in `args`, `env` and `cwd`, and both are also set in
-  the server's environment, so `env` may not define them. `cwd` must start with
-  `./`, `${PLUGIN_ROOT}` or `${PLUGIN_DATA}` and stay under that root.
+  the server's environment, so `env` may not define them. A `cwd` begins with
+  one of `./`, `${PLUGIN_ROOT}` or `${PLUGIN_DATA}` and never climbs out of it.
 - `streamable-http` servers take a `url` and optional `headers` with valid,
   distinct names. `sse` is recognized and refused.
 - A server whose id matches an MCP server already in the user's configuration

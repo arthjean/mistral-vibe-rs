@@ -29,7 +29,9 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("review-parity/corpus.json");
@@ -45,7 +47,19 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-const PROSE: &[OwnProse] = &[];
+/// The accepted divergence the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &["read/before-any-session"],
+    pointer: "/*/response/error/message",
+    count: 2,
+    band: Band::DEFAULT,
+    directives: None,
+    row: "15",
+    accepted: SERVER_PROSE,
+    reason: "the refusal a method answers with, reworded in this port's words under the same error code and data",
+}];
 
 #[test]
 fn the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {

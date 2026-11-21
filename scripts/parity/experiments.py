@@ -90,8 +90,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 from inprocess import SocketGuard, patched_environ
 from experiments_cases import (
     BASE_USER_DOCUMENT,
@@ -1077,6 +1078,7 @@ def capture_config_mapping() -> list[dict[str, Any]]:
     layer = GrowthbookLayer()
     layer.set_variants({SYSTEM_PROMPT: "tests"})
     asyncio.run(layer.load())
+    refusal: str | None
     try:
         asyncio.run(layer._save_to_store({}))  # noqa: SLF001 - the refusal is the subject
     except NotImplementedError:
@@ -1219,7 +1221,6 @@ async def no_whoami(
 
 def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
     from vibe.core.experiments.active import ExperimentSurface
-    from vibe.core.experiments.models import EvalResponse
     from vibe.core.experiments.session import initialize_experiments
 
     forced = {
@@ -2300,7 +2301,7 @@ def parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     return parser.parse_args()
 
 

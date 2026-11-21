@@ -107,8 +107,8 @@ pub(crate) struct ProgrammaticRoute {
     pub(crate) provider: ProviderConfig,
     pub(crate) input_price: f64,
     pub(crate) output_price: f64,
-    /// Reference `get_mistral_provider`: the active provider when it is a
-    /// Mistral one, else the first Mistral provider configured. `web_search`
+    /// Reference `get_mistral_provider`: the active provider if Mistral
+    /// serves it, else the first Mistral provider configured. `web_search`
     /// reaches the conversations API through it.
     pub(crate) mistral: Option<ProviderConfig>,
 }

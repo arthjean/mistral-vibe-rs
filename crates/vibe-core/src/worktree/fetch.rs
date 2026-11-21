@@ -1,7 +1,7 @@
 //! Fetching a remote of a repository nobody vouched for.
 //!
-//! A new worktree branch starts from the remote's default branch, refreshed
-//! first, and the refresh runs inside a checkout whose configuration is the
+//! A fresh worktree branch forks from the remote default branch after updating
+//! it, and that update happens in a checkout whose configuration is the
 //! repository's to write. Git treats several configuration values as commands,
 //! so a plain `git fetch` there would run whatever the repository names. The
 //! reference closes that with `prepare_secure_fetch`
@@ -99,8 +99,8 @@ pub(crate) struct SecureFetch {
 
 /// Refreshes `remote/branch` into its remote-tracking ref under the policy.
 ///
-/// An explicit destination refspec is used, so the caller sees the fetched tip
-/// without trusting the repository's `remote.<name>.fetch`
+/// The refspec names its destination itself, which hands the caller the new
+/// tip with no reliance on the repository's `remote.<name>.fetch`
 /// (`vibe/core/git/repo.py:425-458`).
 pub(crate) fn fetch_branch(
     repo: &GitRepo,
@@ -327,7 +327,7 @@ pub(crate) fn validated_fetch_url(
         return Ok(("ssh", url.to_owned()));
     }
     Err(unsafe_fetch(
-        "only explicit SSH and HTTPS remote URLs may be fetched",
+        "a fetch needs a remote URL that is spelled out as SSH or HTTPS",
     ))
 }
 
@@ -552,12 +552,12 @@ fn inspect_fetch_config(
             && !trusted_scope
         {
             return Err(unsafe_fetch(
-                "repository HTTP configuration is not allowed for fetches",
+                "a fetch refuses HTTP settings the repository defines",
             ));
         }
         if !trusted_scope && URL_REWRITE_KEY.is_match(key) && url.starts_with(value) {
             return Err(unsafe_fetch(
-                "repository URL rewrites are not allowed for fetches",
+                "a fetch refuses URL rewrites the repository defines",
             ));
         }
         if trusted_scope && is_trusted_fetch_config_key(key) {
@@ -619,7 +619,7 @@ fn ensure_global_config_paths_are_trusted(project: &Path) -> Result<(), UnsafeFe
         let resolved = crate::platform::resolve_lenient(&path);
         if resolved.starts_with(project) {
             return Err(unsafe_fetch(
-                "a global git configuration inside the repository is not trusted",
+                "a global git configuration file located in the repository cannot be trusted",
             ));
         }
     }

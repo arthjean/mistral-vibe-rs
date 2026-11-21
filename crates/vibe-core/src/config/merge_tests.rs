@@ -16,7 +16,7 @@ fn compose(documents: &[&str]) -> Result<Table, ConfigError> {
 fn compose_snapshot(documents: &[&str]) -> Result<ConfigSnapshot, ConfigError> {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let project = temporary.path().join("project");
+    let project = temporary.path().join("home/project");
     fs::create_dir_all(project.join(".vibe")).expect("project directory");
     fs::create_dir_all(&home).expect("home directory");
 
@@ -78,7 +78,7 @@ fn concat_appends_in_layer_order_and_keeps_duplicates() {
 fn a_trusted_project_file_extends_the_lower_layer_denylist() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let project = temporary.path().join("project");
+    let project = temporary.path().join("home/project");
     fs::create_dir_all(project.join(".vibe")).expect("project directory");
     fs::create_dir_all(&home).expect("home directory");
     fs::write(

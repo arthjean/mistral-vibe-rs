@@ -21,7 +21,7 @@ fn store(user: &str) -> (LayeredConfig, PathBuf, tempfile::TempDir) {
     let config = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home.clone(),
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     );

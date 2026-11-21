@@ -1,41 +1,85 @@
 {
   "corpus": "crates/vibe-core/tests/tool-config/defaults.json",
   "measuredAgainst": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "tool configuration parity:": {
       "bash/default_timeout": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "8737f1f85019c2f7",
+          "level": "exact"
+        }
       },
       "bash/max_timeout_seconds": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "9b49c2575a2a556f",
+          "level": "exact"
+        }
       },
       "exit_plan_mode/allowlist": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "11a7b1e80ee326d2",
+          "level": "exact"
+        }
       },
       "exit_plan_mode/denylist": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "11a7b1e80ee326d2",
+          "level": "exact"
+        }
       },
       "exit_plan_mode/permission": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "f47ab2a055736839",
+          "level": "exact"
+        }
       },
       "exit_plan_mode/sensitive_patterns": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "11a7b1e80ee326d2",
+          "level": "exact"
+        }
       },
       "git_bash/default_timeout": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "8737f1f85019c2f7",
+          "level": "exact"
+        }
       },
       "git_bash/max_timeout_seconds": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "9b49c2575a2a556f",
+          "level": "exact"
+        }
       },
       "powershell/default_timeout": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "8737f1f85019c2f7",
+          "level": "exact"
+        }
       },
       "powershell/max_timeout_seconds": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "9b49c2575a2a556f",
+          "level": "exact"
+        }
       },
       "read_file/max_read_bytes": {
-        "/declaration/default": 1
+        "/declaration/default": {
+          "count": 1,
+          "fingerprint": "2b8f69a3f9c90cdd",
+          "level": "exact"
+        }
       }
     }
   }

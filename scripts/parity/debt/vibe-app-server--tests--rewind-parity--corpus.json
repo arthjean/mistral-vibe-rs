@@ -1,105 +1,421 @@
 {
   "corpus": "crates/vibe-app-server/tests/rewind-parity/corpus.json",
-  "measuredAgainst": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d",
-  "schemaVersion": 1,
+  "measuredAgainst": "5d4b9bdff90f36b7c9ae469896f49aed41dd84805d0d628ffea2f73870c71960",
+  "schemaVersion": 2,
   "tallies": {
     "rewind parity:": {
       "rewind/across-a-compaction": {
-        "/*/context/*": 7,
-        "/*/context/*/content": 2,
-        "/*/files/notes.txt": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/contextUsage/inputTokens": 1,
-        "/*/response/result/state/session/contextUsage/outputTokens": 1,
-        "/*/response/result/state/session/contextUsage/totalTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/tokenUsage/inputTokens": 1,
-        "/*/response/result/state/session/tokenUsage/outputTokens": 1,
-        "/*/response/result/state/session/tokenUsage/totalTokens": 1
+        "/*/context/*": {
+          "count": 7,
+          "fingerprint": "caf8ee6f7bcf8955",
+          "level": "exact"
+        },
+        "/*/context/*/content": {
+          "count": 2,
+          "fingerprint": "2097558b881a1542",
+          "level": "exact"
+        },
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "1124d10b462829fa",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "8311052a0a975c3a",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "0460ee8b928ce8ac",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/inputTokens": {
+          "count": 1,
+          "fingerprint": "ac2177e280579815",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/outputTokens": {
+          "count": 1,
+          "fingerprint": "d64fd7d8938deb4e",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/totalTokens": {
+          "count": 1,
+          "fingerprint": "685396bc861c44ab",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "603f9bdac3ba95e2",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "4d313de47bb2aeb8",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/inputTokens": {
+          "count": 1,
+          "fingerprint": "b77ef1ed6300e2f2",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/outputTokens": {
+          "count": 1,
+          "fingerprint": "778ffc6a75c2331b",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/totalTokens": {
+          "count": 1,
+          "fingerprint": "0835b60ad88b945d",
+          "level": "exact"
+        }
       },
       "rewind/after-a-compaction": {
-        "/*/context/*": 7,
-        "/*/context/*/content": 5,
-        "/*/context/*/role": 3,
-        "/*/context/*/toolCalls": 1,
-        "/*/files/notes.txt": 1,
-        "/*/notifications/*": 1,
-        "/*/response/result/state/history/*": 3,
-        "/*/response/result/state/history/*/content": 1,
-        "/*/response/result/state/history/*/content/*/text": 1,
-        "/*/response/result/state/history/*/details": 1,
-        "/*/response/result/state/history/*/id": 1,
-        "/*/response/result/state/history/*/kind": 1,
-        "/*/response/result/state/history/*/message": 1,
-        "/*/response/result/state/history/*/outcome": 1,
-        "/*/response/result/state/history/*/role": 1,
-        "/*/response/result/state/history/*/source": 1,
-        "/*/response/result/state/history/*/type": 1,
-        "/*/response/result/state/history/*/userDisplayContent": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/preview": 1
+        "/*/context/*": {
+          "count": 7,
+          "fingerprint": "2ffbfc8ecf8f92bd",
+          "level": "exact"
+        },
+        "/*/context/*/content": {
+          "count": 5,
+          "fingerprint": "d98b33ac84139a03",
+          "level": "exact"
+        },
+        "/*/context/*/role": {
+          "count": 3,
+          "fingerprint": "54a23298555d58d8",
+          "level": "exact"
+        },
+        "/*/context/*/toolCalls": {
+          "count": 1,
+          "fingerprint": "d06cee4ee2974ea4",
+          "level": "exact"
+        },
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "3847ae84294a5e6f",
+          "level": "exact"
+        },
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "d617aa7e07f4d8e8",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*": {
+          "count": 3,
+          "fingerprint": "5fc024ad3cb73d7e",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/content": {
+          "count": 1,
+          "fingerprint": "caed51c9cf9f4405",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "a0656cc1fcff7d36",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/details": {
+          "count": 1,
+          "fingerprint": "b4e685c12b553915",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/id": {
+          "count": 1,
+          "fingerprint": "eb087379862a72d7",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/kind": {
+          "count": 1,
+          "fingerprint": "792923a6f80b883e",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/message": {
+          "count": 1,
+          "fingerprint": "d5e70fe32cd1257a",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 1,
+          "fingerprint": "2f3f23c831cb3a21",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/role": {
+          "count": 1,
+          "fingerprint": "b4f8fc1c64e68f1d",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/source": {
+          "count": 1,
+          "fingerprint": "86832f1145d1036c",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/type": {
+          "count": 1,
+          "fingerprint": "3224c626112a0968",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/userDisplayContent": {
+          "count": 1,
+          "fingerprint": "d0ec036d25a68880",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "a6c0220978c9508f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "980f4d30722c94a0",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "ce5c6ddf79721361",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/preview": {
+          "count": 1,
+          "fingerprint": "b2e303d3d994a2dc",
+          "level": "exact"
+        }
       },
       "rewind/fork-keeping-files": {
-        "/*/notifications/*": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "rewind/fork-restoring-files": {
-        "/*/notifications/*": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "rewind/fork-to-the-first-message": {
-        "/*/files/notes.txt": 1,
-        "/*/notifications/*": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "ae4e54b36cbe10fc",
+          "level": "exact"
+        },
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "rewind/inplace-restoring-files": {
-        "/*/response/result/state/history/*/detail/input/changes": 1,
-        "/*/response/result/state/history/*/detail/input/newString": 1,
-        "/*/response/result/state/history/*/detail/input/oldString": 1,
-        "/*/response/result/state/history/*/detail/input/replaceAll": 1,
-        "/*/response/result/state/history/*/detail/toolName": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/history/*/state/display/message": 1,
-        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": 1,
-        "/*/response/result/state/history/*/state/output/previousContent": 1,
-        "/*/response/result/state/history/*/title": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+        "/*/response/result/state/history/*/detail/input/changes": {
+          "count": 1,
+          "fingerprint": "45cf6976bb1699b2",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "3d9835f3e9a2cbc5",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "bbedee487e1b3965",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "4dce4a57e78ff55e",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/toolName": {
+          "count": 1,
+          "fingerprint": "417514205a516c7e",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "cacab54936bbdf00",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/display/message": {
+          "count": 1,
+          "fingerprint": "b6daa9c2b0568f11",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": {
+          "count": 1,
+          "fingerprint": "c471ec7e9e7ba9fa",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "a9e34bd958d16009",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/title": {
+          "count": 1,
+          "fingerprint": "199057ab19155861",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "c316a62ba15468de",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "90ec30a8bac37d32",
+          "level": "exact"
+        }
       },
       "rewind/inplace-to-the-first-message": {
-        "/*/files/notes.txt": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "ae4e54b36cbe10fc",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "c316a62ba15468de",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "90ec30a8bac37d32",
+          "level": "exact"
+        }
       },
       "rewind/refusals": {
-        "/*/files/notes.txt": 1,
-        "/*/notifications/*": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "161c1a8784384945",
+          "level": "exact"
+        },
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "37d1972b86483dba",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "a600db28c20ddf4d",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "4438540410ab63fd",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "f6bb84e8064f0d06",
+          "level": "exact"
+        }
       },
       "rewind/twice": {
-        "/*/notifications/*": 1,
-        "/*/response/result/state/history/*/outcome": 4,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 4,
+          "fingerprint": "05c6653c096d93bb",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       }
     }
   }

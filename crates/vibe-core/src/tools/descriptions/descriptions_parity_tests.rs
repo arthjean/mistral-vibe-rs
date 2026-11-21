@@ -330,13 +330,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = crate::parity::replay::pinned_reference("tool descriptions") else {
         return;
     };
+    let run = crate::parity::replay::RunDirectory::new("tool-descriptions");
     let repository = repo_root();
-    let recaptured = repository.join("target/tool-descriptions-corpus.json");
+    let recaptured = run.join("tool-descriptions-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/tool-descriptions-full.json"))
+        .arg(run.join("tool-descriptions-full.json"))
         .arg("--corpus")
         .arg(&recaptured)
         .current_dir(&repository)

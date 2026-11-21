@@ -1,5 +1,5 @@
-//! The worktree side of a session's lifecycle: where it starts, who is
-//! standing in it, and what a failed start takes back.
+//! What a session's lifecycle means for worktrees: the directory it opens in,
+//! the holders occupying it, and the cleanup after a start that fails.
 //!
 //! Reference `vibe/core/session/worktrees.py`. Everything here speaks paths
 //! rather than a wire format, so the app server translates its request into
@@ -22,19 +22,19 @@ use super::{
 pub enum WorktreeRequest {
     /// Run in a worktree already linked to the project.
     UseExisting { cwd: PathBuf },
-    /// Raise a worktree under a name the caller chose.
+    /// Create a worktree with a caller-supplied name.
     CreateNamed {
         name: String,
         branch: Option<String>,
     },
-    /// Raise a worktree and let the naming model choose its name.
+    /// Create a worktree whose name comes from the naming model.
     CreateForPrompt { prompt: Option<String> },
 }
 
-/// The directory a session will run in, and what raising it created.
+/// Where a session is going to work, plus anything that had to be created for it.
 ///
-/// `prepared` is [`None`] for a worktree that was already there, which is also
-/// what makes it the record of what a failed start has to undo.
+/// `prepared` stays [`None`] when the worktree existed beforehand; that same
+/// field therefore tells a failed start exactly what it must roll back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedWorktree {
     pub cwd: PathBuf,
@@ -47,7 +47,7 @@ pub struct ResolvedWorktree {
 pub enum LifecycleError {
     #[error("local project path is not a directory: {0}")]
     BaseNotADirectory(PathBuf),
-    #[error("worktree is not linked to the local project: {0}")]
+    #[error("the local project has no linked worktree at {0}")]
     NotLinked(PathBuf),
     #[error("worktree is no longer available: {0}")]
     NoLongerAvailable(PathBuf),
@@ -55,7 +55,7 @@ pub enum LifecycleError {
     Worktree(#[from] WorktreeError),
 }
 
-/// Every worktree question a session has to answer, over one managed root.
+/// The worktree decisions a session depends on, all against one managed root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionWorktrees {
     managed: ManagedRoot,
@@ -72,7 +72,7 @@ impl SessionWorktrees {
         &self.managed
     }
 
-    /// Turns a request into the directory the session will run in.
+    /// Resolves a request to the session's working directory.
     ///
     /// An existing worktree has to be one the project lists, and a managed one
     /// is held for attachment at once; one whose record is gone and whose
@@ -204,14 +204,14 @@ impl SessionWorktrees {
         }
     }
 
-    /// Which managed worktree a directory sits in, if any.
+    /// The managed worktree containing a directory, when there is one.
     #[must_use]
     pub fn root(&self, cwd: &Path) -> Option<PathBuf> {
         ManagedWorktree::at(&self.managed, cwd).map(|managed| managed.root())
     }
 
-    /// Drops the session's mark, so the worktree can be reclaimed later. A
-    /// marker that outlived its session would keep the worktree forever.
+    /// Removes this session's hold so a later sweep may reclaim the worktree;
+    /// a hold left behind by a finished session would pin it indefinitely.
     pub fn release(&self, cwd: &Path, session_id: &str) {
         if let Some(managed) = ManagedWorktree::at(&self.managed, cwd) {
             let _ = managed.release_holder(session_id);

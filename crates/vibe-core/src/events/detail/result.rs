@@ -396,7 +396,7 @@ pub fn persisted_effect_state(
     answer: Option<(&str, Option<&PersistedToolResult>)>,
 ) -> PublicEffectState {
     let Some((content, persisted)) = answer else {
-        let reason = "Tool did not complete before the session ended";
+        let reason = "The session ended while the tool was still running";
         return PublicEffectState::Cancelled {
             reason: reason.to_owned(),
             output_text: String::new(),

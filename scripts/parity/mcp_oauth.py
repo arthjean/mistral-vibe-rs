@@ -54,8 +54,9 @@ from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
@@ -71,7 +72,7 @@ REDIRECT_PLACEHOLDER = "__REDIRECT__"
 
 
 def digest(text: str) -> dict[str, Any]:
-    return {"length": len(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
+    return {"prose": len(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
 # --------------------------------------------------------------------------
@@ -571,6 +572,9 @@ def pkce_pairs(urls: list[str], raw: list[dict[str, Any]]) -> list[str]:
     ]
     checks = []
     for challenge, verifier in zip(challenges, verifiers, strict=False):
+        if verifier is None:
+            checks.append("invalid")
+            continue
         computed = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
         checks.append("valid" if computed == challenge and len(verifier) == 128 else "invalid")
     return checks
@@ -733,7 +737,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--check", action="store_true", help="recapture and fail when the committed corpus differs")
     parser.add_argument("--only", default=None, help="capture only scenarios whose name starts so")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     return parser.parse_args()
 
 

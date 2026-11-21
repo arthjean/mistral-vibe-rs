@@ -300,7 +300,7 @@ fn refused(refusal: QueueRefusal) -> ProtocolFault {
         ),
         QueueRefusal::IdempotencyConflict(key) => ProtocolFault::with_data(
             ProtocolErrorCode::Conflict,
-            format!("Idempotency key was already used with different input: {key}"),
+            format!("This idempotency key already belongs to another input: {key}"),
             json!({"idempotencyKey": key}),
         ),
         QueueRefusal::ItemNotFound(id) => ProtocolFault::with_data(

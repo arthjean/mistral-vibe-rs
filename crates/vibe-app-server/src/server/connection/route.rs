@@ -205,7 +205,7 @@ impl ServerConnection {
             Route::RootDeclined => {
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::NotImplemented,
-                    format!("The selected session backend does not support {method}"),
+                    format!("{method} is not available on the selected session backend"),
                 ));
             }
             _ => {}
@@ -649,7 +649,7 @@ impl ServerConnection {
                     .and_then(Value::as_str)
                     .unwrap_or_default();
                 return Err(refused(format!(
-                    "Model `{model}` does not support images. Switch with /model or remove the attachment."
+                    "Model `{model}` cannot read images. Pick another one with /model, or drop the attachment."
                 )));
             }
         }

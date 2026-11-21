@@ -167,13 +167,13 @@ struct Rejection {
     arguments: Vec<String>,
     /// Every place it objected to, in this repository's own pointer spelling.
     pointers: Vec<String>,
-    /// A digest of the full text, so a message that changed upstream is caught
-    /// without the message ever being stored.
+    /// A prose digest of the full text (`{prose, sha256}`), so a message that
+    /// changed upstream is caught without the message ever being stored.
     #[expect(
         dead_code,
         reason = "the digest is a re-pin signal, not a local assertion"
     )]
-    digest: String,
+    digest: Value,
 }
 
 /// A payload breaking more than one argument at once, and the answer it drew.

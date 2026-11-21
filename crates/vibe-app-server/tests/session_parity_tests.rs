@@ -32,7 +32,9 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("session-parity/corpus.json");
@@ -48,7 +50,25 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-const PROSE: &[OwnProse] = &[];
+/// The accepted divergence the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &[
+        "history/saved",
+        "log/read",
+        "logging/disabled",
+        "relocate/refusals",
+        "rename/saved",
+    ],
+    pointer: "/*/response/error/message",
+    count: 6,
+    band: Band::DEFAULT,
+    directives: None,
+    row: "16",
+    accepted: SERVER_PROSE,
+    reason: "the refusal a method answers with, reworded in this port's words under the same error code and data",
+}];
 
 #[test]
 #[cfg_attr(

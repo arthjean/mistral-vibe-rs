@@ -1,257 +1,837 @@
 {
   "corpus": "crates/vibe-cli/tests/programmatic-parity/corpus.json",
-  "measuredAgainst": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e",
-  "schemaVersion": 1,
+  "measuredAgainst": "d570c56cd5d6f79d617c912d666bbd7e5075bbbaee995d772f8ed950ed0f4388",
+  "schemaVersion": 2,
   "tallies": {
     "programmatic parity:": {
       "approval/auto-approve-over-an-agent": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "a6a4fb4131cb1deb",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "cab52a6c8d55e42f",
+          "level": "exact"
+        }
       },
       "approval/auto-approve-selects-its-agent": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "a6a4fb4131cb1deb",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "cab52a6c8d55e42f",
+          "level": "exact"
+        }
       },
       "approval/default-agent-applies-edits": {
-        "/*/requests/*/tools/*": 16
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        }
       },
       "approval/denied": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/lines/*/json/outcome": 2,
-        "/*/stdout/lines/*/layout/*": 2,
-        "/*/stdout/lines/*/pythonRendering": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 2,
+          "fingerprint": "55b6512f5861ad37",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 2,
+          "fingerprint": "0e5e78def27f6b9a",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 2,
+          "fingerprint": "bf9f802033855935",
+          "level": "exact"
+        }
       },
       "budget/max-price": {
-        "/*/exit": 1,
-        "/*/requests/*": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "e115944b5ab9f450",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout": {
+          "count": 1,
+          "fingerprint": "321ec3a8f5973cfb",
+          "level": "exact"
+        }
       },
       "budget/max-price-configured-model": {
-        "/*/exit": 1,
-        "/*/requests/*": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "2d09ad3ccbe7a74e",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout": {
+          "count": 1,
+          "fingerprint": "321ec3a8f5973cfb",
+          "level": "exact"
+        }
       },
       "budget/max-tokens": {
-        "/*/exit": 1,
-        "/*/requests/*": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "e115944b5ab9f450",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout": {
+          "count": 1,
+          "fingerprint": "321ec3a8f5973cfb",
+          "level": "exact"
+        }
       },
       "budget/max-tokens-large": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "budget/max-turns": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout/lines/*/json/outcome": 1,
-        "/*/stdout/lines/*/layout/*": 1,
-        "/*/stdout/lines/*/pythonRendering": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 1,
+          "fingerprint": "cd8a839f2466e275",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 1,
+          "fingerprint": "5df3929977e3f15c",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 1,
+          "fingerprint": "df4bbf8b07cdb7f1",
+          "level": "exact"
+        }
       },
       "budget/max-turns-json": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout/json/*/outcome": 1,
-        "/*/stdout/layout/*/*": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 1,
+          "fingerprint": "e3a2f046750f24d4",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 1,
+          "fingerprint": "fdeb2ff4e377cc45",
+          "level": "exact"
+        }
       },
       "budget/max-turns-zero": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        }
       },
       "budget/negative-price": {
-        "/*/exit": 1,
-        "/*/requests/*": 1,
-        "/*/stderr": 1,
-        "/*/stdout": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "e4a11975cee35dfc",
+          "level": "exact"
+        },
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "81457643b2c2dc39",
+          "level": "exact"
+        },
+        "/*/stdout": {
+          "count": 1,
+          "fingerprint": "d5c9b8e5a6e2444e",
+          "level": "exact"
+        }
       },
       "budget/negative-tokens": {
-        "/*/exit": 1,
-        "/*/requests/*": 1,
-        "/*/stderr": 1,
-        "/*/stdout": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "e4a11975cee35dfc",
+          "level": "exact"
+        },
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "81457643b2c2dc39",
+          "level": "exact"
+        },
+        "/*/stdout": {
+          "count": 1,
+          "fingerprint": "d5c9b8e5a6e2444e",
+          "level": "exact"
+        }
       },
       "budget/none-is-unbounded": {
-        "/*/requests/*/tools/*": 184
+        "/*/requests/*/tools/*": {
+          "count": 184,
+          "fingerprint": "148c4abb4570735c",
+          "level": "exact"
+        }
       },
       "budget/time-limit": {
-        "/*/exit": 1,
-        "/*/stderr": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "f5a3a9cbd511cb38",
+          "level": "exact"
+        },
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "794eaf36f301bed0",
+          "level": "exact"
+        }
       },
       "config/active-provider": {
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        }
       },
       "config/active-provider-missing-key": {
-        "/*/stderr/*/message": 1
+        "/*/stderr/*/message": {
+          "count": 1,
+          "fingerprint": "f64c62e284498188",
+          "level": "exact"
+        }
       },
       "failure/bad-request-json": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "4e5297c606da91ac",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "failure/bad-request-streaming": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stdout/lines/*/json/outcome": 1,
-        "/*/stdout/lines/*/layout/*": 1,
-        "/*/stdout/lines/*/pythonRendering": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "4e5297c606da91ac",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 1,
+          "fingerprint": "cd8a839f2466e275",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 1,
+          "fingerprint": "5df3929977e3f15c",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 1,
+          "fingerprint": "df4bbf8b07cdb7f1",
+          "level": "exact"
+        }
       },
       "failure/key-in-dotenv": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "failure/missing-key": {
-        "/*/stderr/*": 3
+        "/*/stderr/*": {
+          "count": 3,
+          "fingerprint": "4af25c1c0f5a38bd",
+          "level": "exact"
+        }
       },
       "failure/missing-key-before-empty-prompt": {
-        "/*/stderr/*/message": 1
+        "/*/stderr/*/message": {
+          "count": 1,
+          "fingerprint": "a72063f279da524d",
+          "level": "exact"
+        }
       },
       "failure/unauthorized": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "interrupt/during-a-turn": {
-        "/*/exit": 1,
-        "/*/requests/*/tools/*": 8,
-        "/*/stderr/*": 2,
-        "/*/stdout/lines/*": 2,
-        "/*/stdout/lines/*/json/outcome": 1,
-        "/*/stdout/lines/*/layout/*": 1,
-        "/*/stdout/lines/*/pythonRendering": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stderr/*": {
+          "count": 2,
+          "fingerprint": "598b5fbe6bbc527e",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*": {
+          "count": 2,
+          "fingerprint": "e6110408b3cf5195",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 1,
+          "fingerprint": "cd8a839f2466e275",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 1,
+          "fingerprint": "5df3929977e3f15c",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 1,
+          "fingerprint": "df4bbf8b07cdb7f1",
+          "level": "exact"
+        }
       },
       "output/json": {
-        "/*/requests/*/tools/*": 8,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "output/json-tool-call": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "output/json-unicode": {
-        "/*/requests/*/tools/*": 8,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "output/ndjson-is-no-format": {
-        "/*/exit": 1,
-        "/*/stderr": 1
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "f5a3a9cbd511cb38",
+          "level": "exact"
+        },
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "685e14ef737dd041",
+          "level": "exact"
+        }
       },
       "output/streaming": {
-        "/*/requests/*/tools/*": 8,
-        "/*/stdout/lines/*/json/outcome": 2,
-        "/*/stdout/lines/*/layout/*": 2,
-        "/*/stdout/lines/*/pythonRendering": 2
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 2,
+          "fingerprint": "55b6512f5861ad37",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 2,
+          "fingerprint": "0e5e78def27f6b9a",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 2,
+          "fingerprint": "bf9f802033855935",
+          "level": "exact"
+        }
       },
       "output/streaming-tool-call": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/lines/*/json/outcome": 2,
-        "/*/stdout/lines/*/layout/*": 2,
-        "/*/stdout/lines/*/pythonRendering": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 2,
+          "fingerprint": "55b6512f5861ad37",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 2,
+          "fingerprint": "0e5e78def27f6b9a",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 2,
+          "fingerprint": "bf9f802033855935",
+          "level": "exact"
+        }
       },
       "output/text": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "output/text-no-answer": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "output/text-unicode": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "prompt/argument-wins-over-stdin": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "prompt/blank": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "prompt/stdin": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "session/continue-json": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 4,
-        "/*/stdout/layout/*/*": 4
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "f55e56a0f26cb839",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 4,
+          "fingerprint": "86208c099e1cc574",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 4,
+          "fingerprint": "b1c5d5729a556083",
+          "level": "exact"
+        }
       },
       "session/continue-streaming": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/lines/*": 2,
-        "/*/stdout/lines/*/json/content/*/text": 2,
-        "/*/stdout/lines/*/json/outcome": 2,
-        "/*/stdout/lines/*/layout/*": 2,
-        "/*/stdout/lines/*/pythonRendering": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "f55e56a0f26cb839",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*": {
+          "count": 2,
+          "fingerprint": "dcc52c79d700d447",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/content/*/text": {
+          "count": 2,
+          "fingerprint": "dd527464e2e4e535",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 2,
+          "fingerprint": "e9cd0acb0086cbb3",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 2,
+          "fingerprint": "9164cd17d3e24fa3",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 2,
+          "fingerprint": "29cd6165c17413cb",
+          "level": "exact"
+        }
       },
       "session/continue-text-without-answer": {
-        "/*/requests/*/tools/*": 16
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "f55e56a0f26cb839",
+          "level": "exact"
+        }
       },
       "session/resume-by-id": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "f55e56a0f26cb839",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "teleport/codestral-key": {
-        "/*/stderr": 1
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "86d73204762fe624",
+          "level": "exact"
+        }
       },
       "teleport/non-mistral-model": {
-        "/*/stderr": 1
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "fccd2469334f5e06",
+          "level": "exact"
+        }
       },
       "teleport/outside-a-repository": {
-        "/*/stderr": 1
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "c140677e931fbf62",
+          "level": "exact"
+        }
       },
       "teleport/unverified-key": {
-        "/*/stderr": 1
+        "/*/stderr": {
+          "count": 1,
+          "fingerprint": "1495b45edcc51eb7",
+          "level": "exact"
+        }
       },
       "tools/disabled": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "tools/edit": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/detail/input/changes": 1,
-        "/*/stdout/json/*/detail/input/newString": 1,
-        "/*/stdout/json/*/detail/input/oldString": 1,
-        "/*/stdout/json/*/detail/input/replaceAll": 1,
-        "/*/stdout/json/*/detail/toolName": 1,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/json/*/state/display/message": 1,
-        "/*/stdout/json/*/state/output/occurrences/*/newStartLine": 1,
-        "/*/stdout/json/*/state/output/previousContent": 1,
-        "/*/stdout/json/*/title": 1,
-        "/*/stdout/layout/*/*": 2,
-        "/*/stdout/layout/*/*/*/*/*/*": 3,
-        "/*/stdout/layout/*/*/*/*/*/*/*": 2,
-        "/*/stdout/layout/*/*/*/*/*/*/*/*/*": 1,
-        "/*/stdout/layout/*/*/*/*/*/*/*/*/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/detail/input/changes": {
+          "count": 1,
+          "fingerprint": "b013ef7a2e218fb9",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "f2c63ac4117f7898",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "9f2cc4e5c17d54f2",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "ac03b298aeec1198",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/detail/toolName": {
+          "count": 1,
+          "fingerprint": "bc706bd22d9a095a",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "a6a4fb4131cb1deb",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/state/display/message": {
+          "count": 1,
+          "fingerprint": "8b3e6c9509641902",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/state/output/occurrences/*/newStartLine": {
+          "count": 1,
+          "fingerprint": "e8825e110e3ff0d6",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "fdbfbbd1f9249ba8",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/title": {
+          "count": 1,
+          "fingerprint": "107d8362da80d54b",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "cab52a6c8d55e42f",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*/*/*/*/*": {
+          "count": 3,
+          "fingerprint": "1807f301a6f11edb",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*/*/*/*/*/*": {
+          "count": 2,
+          "fingerprint": "8dc6c8d90042169e",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*/*/*/*/*/*/*/*": {
+          "count": 1,
+          "fingerprint": "bc48255b119dbe97",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*/*/*/*/*/*/*/*/*": {
+          "count": 2,
+          "fingerprint": "c8443efb0d4d32b8",
+          "level": "exact"
+        }
       },
       "tools/enabled-only": {
-        "/*/requests/*/tools/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 2,
+          "fingerprint": "f1dace55b0e41412",
+          "level": "exact"
+        }
       },
       "tools/failed-read": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "tools/todo": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/lines/*/json/outcome": 2,
-        "/*/stdout/lines/*/layout/*": 2,
-        "/*/stdout/lines/*/pythonRendering": 3
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/json/outcome": {
+          "count": 2,
+          "fingerprint": "143c990ad1297b7c",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/layout/*": {
+          "count": 2,
+          "fingerprint": "31fbaeeedbda8e79",
+          "level": "exact"
+        },
+        "/*/stdout/lines/*/pythonRendering": {
+          "count": 3,
+          "fingerprint": "5bd7c76bdc7e2083",
+          "level": "exact"
+        }
       },
       "tools/withheld-question": {
-        "/*/requests/*/tools/*": 16,
-        "/*/stdout/json/*/outcome": 2,
-        "/*/stdout/layout/*/*": 2
+        "/*/requests/*/tools/*": {
+          "count": 16,
+          "fingerprint": "2e3323f0b97b6621",
+          "level": "exact"
+        },
+        "/*/stdout/json/*/outcome": {
+          "count": 2,
+          "fingerprint": "14636e17d2ba764a",
+          "level": "exact"
+        },
+        "/*/stdout/layout/*/*": {
+          "count": 2,
+          "fingerprint": "9fa53030dcfe933c",
+          "level": "exact"
+        }
       },
       "trust/trusted-for-the-run": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       },
       "trust/untrusted-project-config": {
-        "/*/requests/*/tools/*": 8
+        "/*/requests/*/tools/*": {
+          "count": 8,
+          "fingerprint": "1f436f0b83ad644a",
+          "level": "exact"
+        }
       }
     }
   }

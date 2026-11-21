@@ -143,16 +143,17 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = crate::parity::replay::pinned_reference("compaction") else {
         return;
     };
+    let run = crate::parity::replay::RunDirectory::new("compaction");
     let repository = repo_root();
     let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/compaction-recapture.json");
+    let recaptured = run.join("compaction-recapture.json");
     let output = Command::new("python3")
         .arg(&script)
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
         .arg(&recaptured)
         .arg("--corpus")
-        .arg(repository.join("target/compaction-corpus.json"))
+        .arg(run.join("compaction-corpus.json"))
         .current_dir(&repository)
         .output()
         .expect("the compaction capture script runs");
@@ -161,7 +162,7 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the compaction capture failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let fresh = fs::read_to_string(repository.join("target/compaction-corpus.json"))
+    let fresh = fs::read_to_string(run.join("compaction-corpus.json"))
         .expect("the recaptured corpus is readable");
     let committed =
         fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable");

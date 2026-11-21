@@ -37,14 +37,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use serde_json::{Value, json};
 
 use super::operands::inspects_paths;
 use super::*;
-use crate::parity::debt::{Debt, Note, assert_notes};
+use crate::parity::debt::{CHECKS_PINS, Note, assert_notes};
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::pinned_interpreter;
-use crate::parity::replay::{differences, pinned_reference, repository};
+use crate::parity::replay::{
+    Class, Entry, PatternDivergence, Tally, differences, entries, pinned_reference, repository,
+};
+use crate::parity::sensitivity::{Blind, Operator};
 use crate::platform::parse_policy_path;
 use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
@@ -57,73 +60,118 @@ const CORPUS_SCHEMA_VERSION: u32 = 5;
 
 /// The commands the reference resolves to `always` and this port asks about.
 ///
-/// Empty at 2.25.7: the three entries it held at 2.24.0 (`cat $(which ls)`,
-/// `cat file.txt > out.txt` and `git diff --no-index /etc/passwd /dev/null`)
-/// stopped diverging, because the reference now asks about all three too
-/// (`vibe/core/tools/builtins/bash.py:666-715`).
+/// Empty since 2.25.7, and still empty at the 3.1.0 pin: the three entries it
+/// held at 2.24.0 (`cat $(which ls)`, `cat file.txt > out.txt` and
+/// `git diff --no-index /etc/passwd /dev/null`) stopped diverging, because the
+/// reference asks about all three too (`BashTool.resolve_permission`,
+/// `vibe/core/tools/builtins/bash.py:658-713`).
 const STRICTER_THAN_THE_REFERENCE: [&str; 0] = [];
+
+/// The accepted divergence of `docs/parity.md` a stricter resolution would
+/// stand on, which the scorecard carries once [`STRICTER_THAN_THE_REFERENCE`]
+/// names a case.
+const STRICTER_DECISION: &str = "A shell resolution asks where the reference grants";
+
+/// A case of [`STRICTER_THAN_THE_REFERENCE`] as a ledger entry. It covers the
+/// case's `/permission` and admits only `always` upstream with `ask` here, so
+/// a case this port grants where the reference asks is never ledgered: that is
+/// the capability the pointer entries of [`crate::parity::replay`] lack.
+struct Stricter(&'static str);
+
+impl Entry for Stricter {
+    fn covers(&self, scenario: &str, pointer: &str) -> bool {
+        scenario == self.0 && pointer == "/permission"
+    }
+
+    fn label(&self) -> String {
+        format!("stricter {}", self.0)
+    }
+
+    fn count(&self) -> usize {
+        1
+    }
+
+    fn row(&self) -> &str {
+        SHELL_ROW
+    }
+
+    fn class(&self) -> Class {
+        Class::Accepted(STRICTER_DECISION)
+    }
+
+    fn admit(&self, reference: Option<&Value>, port: Option<&Value>) -> Result<(), String> {
+        if reference.and_then(Value::as_str) == Some("always")
+            && port.and_then(Value::as_str) == Some("ask")
+        {
+            Ok(())
+        } else {
+            Err("a stricter entry admits `always` upstream and `ask` here only".to_owned())
+        }
+    }
+}
 
 /// Syntax that stops the extracted parts from describing what runs (a
 /// heredoc, a redirect to a file, a parse error) invalidates the scope on both
 /// sides, and both raise the same literal whole-command requirement after
-/// whatever the guardrail raised
-/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:293-303,317-325`;
-/// `vibe/core/tools/builtins/bash.py:372-390,700-709`). Only the label
-/// differs: the reference prints its own approval wording, which the licensing
-/// boundary keeps out of this repository, and this port prints original
-/// wording naming the same causes.
+/// whatever the guardrail raised (`analyze_shell_command` and
+/// `ShellPermissionAnalysis.invalidates_scope` in
+/// `vibe/core/tools/builtins/_shell_permission_analysis.py`;
+/// `needs_exact_command_scope` and `BashTool.resolve_permission` in
+/// `vibe/core/tools/builtins/bash.py`). Only the label differs: the reference
+/// prints its own approval wording, which the licensing boundary keeps out of
+/// this repository, and this port prints original wording naming the same
+/// causes.
 const UNSCOPED_LABEL: &str = "the whole-command requirement for scope-invalidating syntax \
      carries this port's own wording where the reference prints its approval label \
-     (_shell_permission_analysis.py:181-183, bash.py:700-709)";
+     (ShellPermissionAnalysis.approval_label in _shell_permission_analysis.py, \
+     BashTool.resolve_permission in bash.py)";
 
-/// Requirement fields that differ on a case whose permission conforms, as
-/// `(command, pointer, reason)`, the pointer reaching into the case's recorded
-/// resolution. The fields of the requirements both sides raise are compared
-/// pairwise; a bare `/requirements/<index>` pointer names a requirement that
-/// only one side raises.
-const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
-    (
-        "python3 <<'EOF'\nprint(1)\nEOF",
-        "/requirements/0/label",
-        UNSCOPED_LABEL,
-    ),
-    (
-        "cat file.txt > out.txt",
-        "/requirements/0/label",
-        UNSCOPED_LABEL,
-    ),
-    ("cat 'unterminated", "/requirements/0/label", UNSCOPED_LABEL),
-    (
+/// The accepted divergence of `docs/parity.md` the requirement ledger stands
+/// on.
+const SHELL_WORDING: &str = "A shell approval names scope-invalidating syntax in this port's words";
+
+/// The row of `docs/parity.md` the shell policy answers to.
+const SHELL_ROW: &str = "6";
+
+/// A requirement label this port words its own way on a case whose
+/// permission conforms, as a ledger entry over that case's observation.
+const fn label_divergence(command: &'static str, pointer: &'static str) -> PatternDivergence {
+    PatternDivergence {
+        scenario: command,
+        pointer,
+        count: 1,
+        row: SHELL_ROW,
+        class: Class::Accepted(SHELL_WORDING),
+        reason: UNSCOPED_LABEL,
+    }
+}
+
+/// Requirement fields that differ on a case whose permission conforms, each
+/// naming the case by its replay key and the pointer into its observation
+/// ([`resolution`]). The fields of the requirements both sides raise are
+/// compared pairwise; a bare `/requirements/<index>` pointer names a
+/// requirement that only one side raises.
+const REQUIREMENT_DIVERGENCES: &[PatternDivergence] = &[
+    label_divergence("python3 <<'EOF'\nprint(1)\nEOF", "/requirements/0/label"),
+    label_divergence("cat file.txt > out.txt", "/requirements/0/label"),
+    label_divergence("cat 'unterminated", "/requirements/0/label"),
+    label_divergence(
         "find . -exec rm {} ; && find . -exec rm {} ;",
         "/requirements/1/label",
-        UNSCOPED_LABEL,
     ),
-    ("git $SUB", "/requirements/0/label", UNSCOPED_LABEL),
-    ("sudo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
-    ("git log $REF", "/requirements/0/label", UNSCOPED_LABEL),
-    (
-        "HOME=/x git status",
-        "/requirements/0/label",
-        UNSCOPED_LABEL,
-    ),
-    ("ls >&file", "/requirements/0/label", UNSCOPED_LABEL),
-    ("cat <<< text", "/requirements/0/label", UNSCOPED_LABEL),
-    ("=ls", "/requirements/0/label", UNSCOPED_LABEL),
-    ("f() { ls; }", "/requirements/0/label", UNSCOPED_LABEL),
-    ("ls \\\n -la", "/requirements/0/label", UNSCOPED_LABEL),
-    ("[[ -n $FOO ]]", "/requirements/0/label", UNSCOPED_LABEL),
-    ("npm run $TASK", "/requirements/0/label", UNSCOPED_LABEL),
-    ("cargo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
+    label_divergence("git $SUB", "/requirements/0/label"),
+    label_divergence("sudo $CMD", "/requirements/0/label"),
+    label_divergence("git log $REF", "/requirements/0/label"),
+    label_divergence("HOME=/x git status", "/requirements/0/label"),
+    label_divergence("ls >&file", "/requirements/0/label"),
+    label_divergence("cat <<< text", "/requirements/0/label"),
+    label_divergence("=ls", "/requirements/0/label"),
+    label_divergence("f() { ls; }", "/requirements/0/label"),
+    label_divergence("ls \\\n -la", "/requirements/0/label"),
+    label_divergence("[[ -n $FOO ]]", "/requirements/0/label"),
+    label_divergence("npm run $TASK", "/requirements/0/label"),
+    label_divergence("cargo $CMD", "/requirements/0/label"),
 ];
-
-/// Every requirement field the requirement ledger admits, as
-/// `(case, pointer)`.
-fn requirement_ledger() -> BTreeSet<(String, String)> {
-    REQUIREMENT_DIVERGENCES
-        .iter()
-        .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
-        .collect()
-}
 
 /// What the re-pin's measured gaps of this corpus are known to stand on:
 /// each note explains groups of its measured debt
@@ -433,7 +481,7 @@ const REPOSITORY_FIXTURES: [(&str, &str); 8] = [
     ("gpg", "[gpg]\n\tprogram = gpg2\n"),
 ];
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Requirement {
     scope: String,
@@ -449,18 +497,18 @@ struct Requirement {
 /// command text and survives verbatim. Any other label is reference-authored
 /// text, committed as a digest and a length, so the port's label is reduced
 /// the same way before the two are compared.
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum Label {
     Verbatim(String),
     Described(Described),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Described {
-    described: String,
-    length: usize,
+    prose: usize,
+    sha256: String,
 }
 
 impl Label {
@@ -469,15 +517,9 @@ impl Label {
         if label == invocation_pattern || label == session_pattern {
             return Self::Verbatim(label.to_owned());
         }
-        let hash = Sha256::digest(label.as_bytes());
-        let hex = hash.iter().fold(String::new(), |mut accumulator, byte| {
-            use std::fmt::Write as _;
-            let _ = write!(accumulator, "{byte:02x}");
-            accumulator
-        });
         Self::Described(Described {
-            described: format!("sha256:{}", &hex[..32]),
-            length: label.chars().count(),
+            prose: label.chars().count(),
+            sha256: crate::text::sha256_hex(label.as_bytes()),
         })
     }
 }
@@ -486,10 +528,16 @@ fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CORPUS_RELATIVE)
 }
 
+/// The committed corpus text, which a [`Tally`] holds to its manifest entry.
+fn corpus_text() -> String {
+    let path = corpus_path();
+    fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("shell policy corpus at {}: {error}", path.display()))
+}
+
 fn corpus() -> Corpus {
     let path = corpus_path();
-    let raw = fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("shell policy corpus at {}: {error}", path.display()));
+    let raw = corpus_text();
     let corpus: Corpus = serde_json::from_str(&raw)
         .unwrap_or_else(|error| panic!("shell policy corpus at {}: {error}", path.display()));
     assert_eq!(
@@ -874,210 +922,157 @@ fn every_escaping_operand_matches_the_reference() {
     );
 }
 
-/// What replaying one family of resolutions found.
-#[derive(Default)]
-struct Replay {
-    /// Every case key compared, which is what scopes a ledger entry's stale
-    /// direction to the family that replays it.
-    compared: BTreeSet<String>,
-    conforming: usize,
-    /// Cases resolving to `ask` here where the reference grants.
-    stricter: BTreeSet<String>,
-    /// `(command, pointer)` for every requirement field that differs.
-    requirement_diffs: BTreeSet<(String, String)>,
-    untolerated: Vec<String>,
+/// The fields of a requirement both sides raise, compared pairwise.
+const REQUIREMENT_FIELDS: [&str; 5] = [
+    "scope",
+    "invocationPattern",
+    "sessionPattern",
+    "label",
+    "pathScopeRoot",
+];
+
+/// What one resolution case is compared as: the permission it resolves to
+/// and the requirements it raises.
+fn resolution(permission: &str, requirements: &[Requirement]) -> Value {
+    json!({
+        "permission": permission,
+        "requirements": serde_json::to_value(requirements).expect("a requirement serializes"),
+    })
 }
 
-impl Replay {
-    /// Compares one analysis with what the reference recorded for `key`.
-    fn compare(
-        &mut self,
-        key: &str,
-        analysis: &ShellAnalysis,
-        permission: Option<&str>,
-        requirements: &[Requirement],
-        lists: &ShellCommandLists,
-        workspace: &OperandWorkspace,
-    ) {
-        self.compared.insert(key.to_owned());
-        // The reference answering `None` defers to the configured permission,
-        // which is what this port's analysis returns in the same place.
-        let expected =
-            permission.map_or_else(|| permission_wire(lists.permission), ToOwned::to_owned);
-        let resolved = permission_wire(analysis.mode);
-        if resolved != expected {
-            // Collected rather than asserted in place, so the ledgers are
-            // still checked; the assertion at the end is as strict.
-            if expected == "always" && resolved == "ask" && !analysis.requirements.is_empty() {
-                self.stricter.insert(key.to_owned());
-            } else {
-                self.untolerated.push(format!(
-                    "`{}` resolves to `{resolved}` here and to `{expected}` upstream: {:?}",
-                    key.escape_debug(),
-                    analysis.rationale
-                ));
-            }
-            return;
-        }
-        if permission.is_none() && !analysis.requirements.is_empty() {
-            self.untolerated.push(format!(
-                "`{}` defers upstream and raises requirements here: {:?}",
-                key.escape_debug(),
-                analysis.requirements
-            ));
-            return;
-        }
-        self.conforming += 1;
-
-        // A conforming permission still has to raise the same requirements.
-        let raised = analysis
-            .requirements
-            .iter()
-            .map(|requirement| {
-                let invocation_pattern = workspace.normalize(&requirement.invocation_pattern);
-                let session_pattern = workspace.normalize(&requirement.session_pattern);
-                Requirement {
-                    scope: wire_scope(requirement.scope),
-                    label: Label::committed(
-                        &workspace.normalize(&requirement.label),
-                        &invocation_pattern,
-                        &session_pattern,
-                    ),
-                    invocation_pattern,
-                    session_pattern,
-                    path_scope_root: requirement
-                        .path_scope_root
-                        .as_deref()
-                        .map(|root| workspace.normalize(root)),
-                }
-            })
-            .collect::<Vec<_>>();
-        // A requirement only one side raises is its own divergence; the ones
-        // both sides raise are still compared field by field.
-        let shared = raised.len().min(requirements.len());
-        for index in shared..raised.len().max(requirements.len()) {
-            self.requirement_diffs
-                .insert((key.to_owned(), format!("/requirements/{index}")));
-            eprintln!(
-                "`{}` /requirements/{index}: {:?} here, {:?} upstream",
-                key.escape_debug(),
-                raised.get(index),
-                requirements.get(index)
-            );
-        }
-        for (index, (here, upstream)) in raised.iter().zip(requirements).enumerate() {
-            let fields = [
-                ("scope", here.scope == upstream.scope),
-                (
-                    "invocationPattern",
-                    here.invocation_pattern == upstream.invocation_pattern,
-                ),
-                (
-                    "sessionPattern",
-                    here.session_pattern == upstream.session_pattern,
-                ),
-                ("label", here.label == upstream.label),
-                (
-                    "pathScopeRoot",
-                    here.path_scope_root == upstream.path_scope_root,
-                ),
-            ];
-            for (field, equal) in fields {
-                if !equal {
-                    self.requirement_diffs
-                        .insert((key.to_owned(), format!("/requirements/{index}/{field}")));
-                    eprintln!(
-                        "`{}` /requirements/{index}/{field}: {here:?} here, {upstream:?} upstream",
-                        key.escape_debug()
-                    );
-                }
-            }
-        }
-    }
-
-    /// Checks the ledgers in both directions and fails on anything untolerated.
-    fn finish(self, family: &str, total: usize) {
-        let ledger = STRICTER_THAN_THE_REFERENCE
-            .iter()
-            .map(|command| (*command).to_owned())
-            .collect::<BTreeSet<String>>();
-        let unlisted = self
-            .stricter
-            .difference(&ledger)
-            .cloned()
-            .collect::<Vec<_>>();
-        assert!(
-            unlisted.is_empty(),
-            "{family}: commands diverging from the reference without a ledger entry: {unlisted:?}"
-        );
-        let requirement_ledger = requirement_ledger();
-        let heading = format!("shell policy parity ({family}):");
-        let mut debt = Debt::load(CORPUS_LISTED, &heading);
-        let mut gap_cases = BTreeSet::new();
-        let mut unlisted = Vec::new();
-        for (key, pointer) in self.requirement_diffs.difference(&requirement_ledger) {
-            if debt.absorb(key, pointer) {
-                gap_cases.insert(key.clone());
-            } else {
-                unlisted.push((key.clone(), pointer.clone()));
-            }
-        }
-        assert!(
-            unlisted.is_empty(),
-            "{family}: requirements diverging from the reference without a ledger entry: {unlisted:?}"
-        );
-        debt.assert_settled();
-        let stale = requirement_ledger
-            .iter()
-            .filter(|(key, _)| self.compared.contains(key))
-            .filter(|entry| !self.requirement_diffs.contains(*entry))
-            .collect::<Vec<_>>();
-        assert!(
-            stale.is_empty(),
-            "{family}: requirement ledger entries that no longer diverge; remove them: {stale:?}"
-        );
-        eprintln!(
-            "shell policy: {family} {}/{total} conforming, {} ledgered, {} requirement fields ledgered",
-            self.conforming,
-            self.stricter.len(),
-            self.requirement_diffs.len()
-        );
-        assert!(
-            self.untolerated.is_empty(),
-            "{family}: resolutions that differ in another direction than the one tolerated \
-             (`always` upstream, `ask` here): {:#?}",
-            self.untolerated
-        );
-
-        // A case differs when it resolves stricter or raises a requirement
-        // field the reference does not. The two untyped ledgers hold decided
-        // divergences; a case with a field under a typed gap is not at parity.
-        let differing = self
-            .stricter
-            .iter()
-            .cloned()
-            .chain(self.requirement_diffs.iter().map(|(key, _)| key.clone()))
-            .collect::<BTreeSet<String>>();
-        let gap_differences = debt.covered();
-        assert_figures(
-            &heading,
-            CORPUS_LISTED,
-            Figures {
-                conformant: total - differing.len(),
-                accepted: differing.len() - gap_cases.len(),
-                total,
-                accepted_differences: self.stricter.len() + self.requirement_diffs.len()
-                    - gap_differences,
-                gap_differences,
-                prose_differences: 0,
-            },
-            serde_json::json!({}),
-        );
-    }
+/// The keys of `value` when it is an object.
+fn keys_of(value: &Value) -> impl Iterator<Item = &str> {
+    value
+        .as_object()
+        .into_iter()
+        .flat_map(|object| object.keys().map(String::as_str))
 }
 
-/// Every requirement ledger entry names a case one family replays, so the
-/// per-family stale check in [`Replay::finish`] reads every entry somewhere.
+/// Where two resolutions differ. A permission that differs is reported
+/// alone, since every requirement below it is a consequence of resolving
+/// otherwise. A requirement only one side raises is one difference at its
+/// index, and the ones both sides raise are compared field by field, each
+/// field as one value. Any other key only one side holds, or holds otherwise,
+/// is a difference of its own.
+fn resolution_differences(reference: &Value, port: &Value) -> Vec<String> {
+    if !(reference.is_object() && port.is_object()) {
+        return if reference == port {
+            Vec::new()
+        } else {
+            vec![String::new()]
+        };
+    }
+    if reference.get("permission") != port.get("permission") {
+        return vec!["/permission".to_owned()];
+    }
+    let mut found = Vec::new();
+    let keys: BTreeSet<&str> = keys_of(reference).chain(keys_of(port)).collect();
+    for key in keys {
+        match (key, reference.get(key), port.get(key)) {
+            ("permission", ..) => {}
+            ("requirements", Some(Value::Array(upstream)), Some(Value::Array(raised))) => {
+                let shared = raised.len().min(upstream.len());
+                for index in shared..raised.len().max(upstream.len()) {
+                    found.push(format!("/requirements/{index}"));
+                }
+                for (index, (there, here)) in upstream.iter().zip(raised).enumerate() {
+                    if !(there.is_object() && here.is_object()) {
+                        if there != here {
+                            found.push(format!("/requirements/{index}"));
+                        }
+                        continue;
+                    }
+                    let fields: BTreeSet<&str> = REQUIREMENT_FIELDS
+                        .into_iter()
+                        .chain(keys_of(there))
+                        .chain(keys_of(here))
+                        .collect();
+                    for field in fields {
+                        if there.get(field) != here.get(field) {
+                            found.push(format!("/requirements/{index}/{field}"));
+                        }
+                    }
+                }
+            }
+            (_, left, right) if left != right => found.push(format!("/{key}")),
+            _ => {}
+        }
+    }
+    found
+}
+
+/// One case of a resolution family: its replay key, what the reference
+/// recorded and what this port resolves.
+type ResolutionUnit = (String, Value, Value);
+
+/// The resolution case `key` as both sides answer it. The reference answering
+/// no permission defers to the configured one, which is what this port's
+/// analysis returns in the same place.
+fn resolution_unit(
+    key: String,
+    analysis: &ShellAnalysis,
+    permission: Option<&str>,
+    requirements: &[Requirement],
+    lists: &ShellCommandLists,
+    workspace: &OperandWorkspace,
+) -> ResolutionUnit {
+    let expected = permission.map_or_else(|| permission_wire(lists.permission), ToOwned::to_owned);
+    let raised = analysis
+        .requirements
+        .iter()
+        .map(|requirement| {
+            let invocation_pattern = workspace.normalize(&requirement.invocation_pattern);
+            let session_pattern = workspace.normalize(&requirement.session_pattern);
+            Requirement {
+                scope: wire_scope(requirement.scope),
+                label: Label::committed(
+                    &workspace.normalize(&requirement.label),
+                    &invocation_pattern,
+                    &session_pattern,
+                ),
+                invocation_pattern,
+                session_pattern,
+                path_scope_root: requirement
+                    .path_scope_root
+                    .as_deref()
+                    .map(|root| workspace.normalize(root)),
+            }
+        })
+        .collect::<Vec<_>>();
+    (
+        key,
+        resolution(&expected, requirements),
+        resolution(&permission_wire(analysis.mode), &raised),
+    )
+}
+
+/// Replays one family of resolutions through a [`Tally`] under its line of
+/// the "Measured figures" table: every difference falls under a ledger entry
+/// naming one of the family's cases or under the corpus's measured debt, and
+/// every entry still reproduces as many differences as it declares.
+fn settle_resolutions(family: &str, units: &[ResolutionUnit]) {
+    let keys: BTreeSet<&str> = units.iter().map(|(key, ..)| key.as_str()).collect();
+    let stricter: Vec<Stricter> = STRICTER_THAN_THE_REFERENCE
+        .into_iter()
+        .filter(|command| keys.contains(command))
+        .map(Stricter)
+        .collect();
+    let requirements = REQUIREMENT_DIVERGENCES
+        .iter()
+        .filter(|entry| keys.contains(entry.scenario));
+    let ledger = entries(&stricter).chain(requirements.map(|entry| entry as &dyn Entry));
+    let corpus = corpus_text();
+    let mut tally = Tally::new(&corpus, ledger);
+    tally.differ(resolution_differences);
+    for (key, reference, port) in units {
+        let found = resolution_differences(reference, port);
+        tally.record(key, reference, port, found);
+    }
+    tally.conclude(&format!("shell policy parity ({family}):"));
+}
+
+/// Every ledger entry names a case one family replays, so the family that
+/// holds it ([`settle_resolutions`]) fails it once it stops reproducing.
 #[test]
 fn every_requirement_ledger_entry_names_a_corpus_case() {
     let corpus = corpus();
@@ -1089,17 +1084,19 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
         .chain(corpus.managed_resolutions.iter().map(managed_key))
         .chain(corpus.allowlist_grants.iter().map(grant_key))
         .collect::<BTreeSet<_>>();
-    let orphans = requirement_ledger()
-        .into_iter()
-        .filter(|(key, _)| !keys.contains(key))
+    let orphans = REQUIREMENT_DIVERGENCES
+        .iter()
+        .map(|entry| entry.scenario)
+        .chain(STRICTER_THAN_THE_REFERENCE)
+        .filter(|key| !keys.contains(*key))
         .collect::<Vec<_>>();
     assert!(
         orphans.is_empty(),
-        "requirement ledger entries naming no corpus case: {orphans:?}"
+        "ledger entries naming no corpus case: {orphans:?}"
     );
     eprintln!(
         "shell policy: {} requirement fields ledgered",
-        requirement_ledger().len()
+        REQUIREMENT_DIVERGENCES.len()
     );
 }
 
@@ -1117,31 +1114,20 @@ fn every_resolution_matches_the_reference() {
     let workspace = OperandWorkspace::build();
     let context = workspace.context();
     let lists = posix_lists();
-    let mut replay = Replay::default();
+    let mut units = Vec::new();
     for case in &corpus.resolutions {
         let command = workspace.expand(&case.command);
         let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
-        replay.compare(
-            &case.command,
+        units.push(resolution_unit(
+            case.command.clone(),
             &analysis,
             case.permission.as_deref(),
             &case.requirements,
             &lists,
             &workspace,
-        );
+        ));
     }
-    // Every stricter entry is a resolution case, so its stale direction is read
-    // against this family alone; the requirement ledgers are read per family in
-    // `Replay::finish`.
-    let stale = STRICTER_THAN_THE_REFERENCE
-        .iter()
-        .filter(|command| !replay.stricter.contains(**command))
-        .collect::<Vec<_>>();
-    assert!(
-        stale.is_empty(),
-        "ledger entries that no longer diverge; remove them: {stale:?}"
-    );
-    replay.finish("resolutions", corpus.counts.resolution_cases);
+    settle_resolutions("resolutions", &units);
 }
 
 /// A git reader is granted in a repository whose configuration runs nothing,
@@ -1155,7 +1141,7 @@ fn every_repository_resolution_matches_the_reference() {
         corpus.counts.repository_cases
     );
     let lists = posix_lists();
-    let mut replay = Replay::default();
+    let mut units = Vec::new();
     for (fixture, config) in REPOSITORY_FIXTURES {
         let workspace = OperandWorkspace::build();
         fs::create_dir_all(workspace.workdir.join(".git")).expect("git directory");
@@ -1168,14 +1154,14 @@ fn every_repository_resolution_matches_the_reference() {
         {
             let command = workspace.expand(&case.command);
             let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
-            replay.compare(
-                &repository_key(case),
+            units.push(resolution_unit(
+                repository_key(case),
                 &analysis,
                 case.permission.as_deref(),
                 &case.requirements,
                 &lists,
                 &workspace,
-            );
+            ));
         }
     }
     assert!(
@@ -1187,7 +1173,7 @@ fn every_repository_resolution_matches_the_reference() {
                 .any(|(name, _)| *name == case.fixture)),
         "the corpus names a repository fixture this runner does not write"
     );
-    replay.finish("repository resolutions", corpus.counts.repository_cases);
+    settle_resolutions("repository resolutions", &units);
 }
 
 /// The managed resolver: a call's `cwd`, custom shell and custom environment
@@ -1201,7 +1187,7 @@ fn every_managed_resolution_matches_the_reference() {
     );
     let workspace = OperandWorkspace::build();
     let lists = posix_lists();
-    let mut replay = Replay::default();
+    let mut units = Vec::new();
     for case in &corpus.managed_resolutions {
         let cwd = case.cwd.as_deref().map(|cwd| workspace.expand(cwd));
         let context = workspace.context().managed(
@@ -1210,16 +1196,16 @@ fn every_managed_resolution_matches_the_reference() {
             override_requirements(case.shell.as_deref(), &case.env),
         );
         let analysis = analyze_shell(replay_flavor(), &case.command, &context, &lists);
-        replay.compare(
-            &managed_key(case),
+        units.push(resolution_unit(
+            managed_key(case),
             &analysis,
             case.permission.as_deref(),
             &case.requirements,
             &lists,
             &workspace,
-        );
+        ));
     }
-    replay.finish("managed resolutions", corpus.counts.managed_cases);
+    settle_resolutions("managed resolutions", &units);
 }
 
 /// A path grant in the shell's allowlist clears the outside paths it covers,
@@ -1232,7 +1218,7 @@ fn every_allowlist_grant_resolution_matches_the_reference() {
         corpus.counts.allowlist_grant_cases
     );
     let workspace = OperandWorkspace::build();
-    let mut replay = Replay::default();
+    let mut units = Vec::new();
     for case in &corpus.allowlist_grants {
         let mut lists = posix_lists();
         lists.allowlist = case
@@ -1252,16 +1238,16 @@ fn every_allowlist_grant_resolution_matches_the_reference() {
             other => panic!("unknown resolver {other}"),
         };
         let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
-        replay.compare(
-            &grant_key(case),
+        units.push(resolution_unit(
+            grant_key(case),
             &analysis,
             case.permission.as_deref(),
             &case.requirements,
             &lists,
             &workspace,
-        );
+        ));
     }
-    replay.finish("allowlist grants", corpus.counts.allowlist_grant_cases);
+    settle_resolutions("allowlist grants", &units);
 }
 
 /// Only an encoded grant or an absolute path glob reads as a path grant, and
@@ -1385,6 +1371,20 @@ fn windows_grammar_units(grammar: &WindowsGrammar) -> Vec<GrammarUnit> {
     units
 }
 
+/// What the sensitivity pass of the Windows grammar replay cannot see on a
+/// host that checks no debt pin ([`CHECKS_PINS`]). Its measured debt covers
+/// whole subtrees (`/parts/*/**` of a command), so a token dropped where
+/// nothing yet differs shifts the tokens after it onto pointers the same debt
+/// group covers; on Linux the group's pin sees the shift, elsewhere only its
+/// count, which stays what it was.
+const WINDOWS_GRAMMAR_BLIND: &[Blind] = &[Blind {
+    operator: Operator::DropElement,
+    reason: "a token dropped from a command whose `/parts/*/**` subtree the measured debt \
+             already holds shifts the tokens after it onto pointers the same debt group \
+             covers, and on a host that checks no debt pin the group's count stays what it \
+             was, so the drop reads as the difference it already counted",
+}];
+
 /// The PowerShell grammar splits, tokenizes, names, matches and expands as the
 /// reference does, except where its measured debt records a gap
 /// ([`WINDOWS_GRAMMAR_NOTES`] says why).
@@ -1396,36 +1396,6 @@ fn every_windows_grammar_answer_matches_the_reference() {
     let grammar = &corpus.windows_grammar;
     assert_eq!(grammar.commands.len(), corpus.counts.windows_grammar_cases);
     let units = windows_grammar_units(grammar);
-    let mut debt = Debt::load(CORPUS_LISTED, WINDOWS_GRAMMAR);
-    let mut unexplained = Vec::new();
-    let mut conformant = 0_usize;
-    for (scenario, reference, port) in &units {
-        let found = differences(reference, port);
-        if found.is_empty() {
-            conformant += 1;
-            continue;
-        }
-        for pointer in found {
-            if !debt.absorb(scenario, &pointer) {
-                unexplained.push(format!(
-                    "{} {pointer}\n  reference: {}\n  port:      {}",
-                    scenario.escape_debug(),
-                    reference
-                        .pointer(&pointer)
-                        .map_or_else(|| "absent".to_owned(), ToString::to_string),
-                    port.pointer(&pointer)
-                        .map_or_else(|| "absent".to_owned(), ToString::to_string),
-                ));
-            }
-        }
-    }
-    assert!(
-        unexplained.is_empty(),
-        "{} differences in the Windows grammar fall outside its measured debt:\n{}",
-        unexplained.len(),
-        unexplained.join("\n")
-    );
-    debt.assert_settled();
     eprintln!(
         "shell policy: windows grammar {} commands, {} patterns, {} expansions, {} tokens",
         grammar.commands.len(),
@@ -1433,17 +1403,15 @@ fn every_windows_grammar_answer_matches_the_reference() {
         grammar.expansions.len(),
         grammar.tokens.len()
     );
-    assert_figures(
-        WINDOWS_GRAMMAR,
-        CORPUS_LISTED,
-        Figures {
-            conformant,
-            total: units.len(),
-            gap_differences: debt.covered(),
-            ..Figures::default()
-        },
-        serde_json::json!({}),
-    );
+    let corpus = corpus_text();
+    let mut tally = Tally::new(&corpus, []);
+    if !CHECKS_PINS {
+        tally.blind(WINDOWS_GRAMMAR_BLIND);
+    }
+    for (scenario, reference, port) in &units {
+        tally.record(scenario, reference, port, differences(reference, port));
+    }
+    tally.conclude(WINDOWS_GRAMMAR);
 }
 
 /// The value `mode` is recorded under upstream, which is its lowercase name.

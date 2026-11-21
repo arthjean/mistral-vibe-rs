@@ -40,8 +40,3 @@ EXPECTED_VERSION = "3.1.0"
 DEFAULT_REFERENCE = Path(
     os.environ.get("VIBE_REFERENCE") or "/home/arthur/dev/mistral-vibe"
 )
-
-#: The single documented command that returns a checkout to the pin.
-RESTORE_COMMAND = (
-    f"git -C /home/arthur/dev/mistral-vibe checkout {EXPECTED_COMMIT}"
-)

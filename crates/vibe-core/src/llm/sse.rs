@@ -3,7 +3,7 @@
 //! Reference `iter_sse_lines` (`vibe/core/utils/sse.py`) splits a body on CRLF,
 //! LF and CR only: a JSON string may carry U+2028 or U+0085 unescaped, and a
 //! splitter that also breaks there would cut a payload in half. A CR that ends
-//! a network chunk is held back, since it may be the first half of a CRLF.
+//! a network chunk is held back, because the matching LF may arrive next.
 //!
 //! [`data_line`] is the generic backend's reading of one line
 //! (`GenericBackend._send_streaming_request`): blank lines and comments are

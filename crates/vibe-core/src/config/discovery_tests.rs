@@ -30,7 +30,7 @@ fn stack(
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )
@@ -112,7 +112,7 @@ fn a_store_with_no_discovery_composes_an_empty_layer_and_an_unchanged_document()
     let store = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     );
@@ -143,7 +143,7 @@ fn a_failed_discovery_pass_empties_the_layer_and_is_reported_once_per_load() {
     let store = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )

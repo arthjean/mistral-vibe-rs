@@ -15,7 +15,7 @@ pub fn check_request(available: &[&str], arguments: &serde_json::Value) -> Resul
         .get("name")
         .and_then(serde_json::Value::as_str)
         .filter(|name| !name.trim().is_empty())
-        .ok_or_else(|| "skill name must be a non-empty string".to_owned())?;
+        .ok_or_else(|| "the skill name has to be a non-empty string".to_owned())?;
     if available.contains(&requested) {
         return Ok(());
     }
@@ -38,9 +38,9 @@ pub fn check_request(available: &[&str], arguments: &serde_json::Value) -> Resul
         format!(" Available skills: {}.", quoted(available))
     };
     Err(format!(
-        "Skill {requested:?} is not available.{suggestion} Use an exact name from the available \
-         skills below. Connector names and unlisted names in skill instructions are not \
-         skills.{listing}"
+        "Skill {requested:?} is not available.{suggestion} Pick an exact name from the skills \
+         listed below; neither connector names nor names that skill instructions mention \
+         without listing are skills.{listing}"
     ))
 }
 

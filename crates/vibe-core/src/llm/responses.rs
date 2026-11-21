@@ -58,8 +58,8 @@ fn input_items(messages: &[Message]) -> Vec<Value> {
                         })
                         .map(|item| Value::Object(item.clone())),
                 );
-                // A message the model never wrote would sit between a
-                // reasoning item and the call it belongs to.
+                // An empty assistant message, which the model did not produce,
+                // would wedge itself between a reasoning item and its call.
                 if !message.text().is_empty() {
                     items.push(json!({
                         "role": "assistant",

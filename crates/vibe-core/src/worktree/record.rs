@@ -32,8 +32,8 @@ use crate::time::UtcTimestamp;
 
 use super::{ManagedRoot, WorktreeError};
 
-/// The directory claims live in, beside the buckets. A bucket is always
-/// `<name>-<12 hex>`, so this leading-dot name cannot collide with one
+/// Where claims are kept, next to the buckets. Bucket names always take the
+/// `<name>-<12 hex>` shape, which no name starting with a dot can match
 /// (`vibe/core/git/worktree/record.py:25-31`).
 pub const CLAIMS_DIR_NAME: &str = ".claims";
 const RECORD_FILENAME: &str = "record.json";
@@ -261,9 +261,9 @@ impl WorktreeClaim {
 
     /// Every claimed name of one bucket.
     ///
-    /// Only claims, never a listing of the bucket itself: a directory there with
-    /// no claim is a live reservation or something the user made, and neither
-    /// belongs to automatic cleanup (`vibe/core/git/worktree/record.py:144-157`).
+    /// It reads the claims and never lists the bucket directory: an unclaimed
+    /// entry there is either a reservation in progress or the user's own, and
+    /// automatic cleanup must leave both alone (`vibe/core/git/worktree/record.py:144-157`).
     #[must_use]
     pub fn in_bucket(managed: &ManagedRoot, bucket: &str) -> Vec<Self> {
         let Ok(entries) = fs::read_dir(managed.claims().join(bucket)) else {
@@ -322,9 +322,9 @@ impl WorktreeClaim {
 
     /// The record, or [`None`] when there is none or it cannot be read.
     ///
-    /// Fails closed: an unreadable record means the worktree is not treated as
-    /// Vibe's, so nothing is deleted on the strength of one, and the file is
-    /// left in place as what may be the only breadcrumb
+    /// It errs on the safe side: a record that cannot be parsed makes the
+    /// worktree count as foreign, so no deletion ever rests on it, and the file
+    /// stays where it is in case it is the last clue left
     /// (`vibe/core/git/worktree/record.py:163-175`).
     #[must_use]
     pub fn read(&self) -> Option<WorktreeRecord> {
@@ -350,9 +350,9 @@ impl WorktreeClaim {
         self.discard_empty_directories();
     }
 
-    /// Deletes the record, and the claim directories if nothing else is in
-    /// them. A surviving holder keeps them, because losing its marker would
-    /// let the next release delete the worktree underneath a live session.
+    /// Deletes the record, then the claim directories once they are empty. Any
+    /// remaining holder keeps them alive: without its marker, a later release
+    /// could remove the worktree out from under a session still using it.
     pub fn delete(&self) {
         self.finish_starting();
         let _ = fs::remove_file(self.directory().join(RECORD_FILENAME));
@@ -553,11 +553,12 @@ fn discard_stale_holder(holder: &Path) -> bool {
     fs::remove_file(holder).is_ok()
 }
 
-/// A temporary holder bridging worktree resolution and session attachment.
+/// A stand-in holder covering the gap between resolving a worktree and
+/// attaching the session to it.
 ///
-/// Pruning has to see the worktree as occupied before the session has an id it
-/// can register, so this holds it in between and is released once the session
-/// holder is in place or startup is abandoned
+/// The session gets an id only later, yet pruning must already count the
+/// worktree as busy; this placeholder fills that interval and goes away once the
+/// real session holder exists or the start is given up
 /// (`vibe/core/git/worktree/repository.py:48-62`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingSessionHold {

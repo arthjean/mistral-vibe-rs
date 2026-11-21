@@ -47,8 +47,8 @@ const AUTO_COMPACT_THRESHOLD_FIELD: &str = "auto_compact_threshold";
 /// rejected, every entry of `models` resolves its compaction threshold, an
 /// `active_model` naming nothing configured is unpinned, an `allowed_models`
 /// pattern matching nothing, a pinned model the allowlist excludes and a
-/// `[utility_models]` alias that names no selectable model are reported, a
-/// compaction model on another provider than the active one is reported, and
+/// `[utility_models]` alias that names no selectable model are reported, so is
+/// a compaction model whose provider differs from the active model's, and
 /// the vision model is checked.
 ///
 /// `admin` is what the organization's managed layer sets, which reference

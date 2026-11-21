@@ -97,7 +97,9 @@ impl AppServer {
         if count > MAX_IMAGES_PER_MESSAGE {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::InvalidParams,
-                format!("Too many image attachments (got {count}, max {MAX_IMAGES_PER_MESSAGE})."),
+                format!(
+                    "{count} image attachments exceed the limit of {MAX_IMAGES_PER_MESSAGE} per message."
+                ),
             ));
         }
         let Some(route) = self.unified_vision(unified) else {
@@ -252,9 +254,9 @@ impl AppServer {
             .collect()
     }
 
-    /// Reference `_resolved_invoked_skills`: the name and body of each skill
-    /// the prompt invokes, in prompt order. Unknown names, skills the user
-    /// may not invoke, and `/loop` prompts invoke nothing.
+    /// Reference `_resolved_invoked_skills`: for every skill a prompt calls,
+    /// its name and body, ordered as the prompt names them. A `/loop` prompt,
+    /// a name nothing answers to and a skill closed to the user yield none.
     pub(super) fn resolved_invoked_skills(
         &self,
         unified: &UnifiedSession,
@@ -343,9 +345,9 @@ fn harness_image(attachment: &Value, roots: &[PathBuf]) -> Result<Value, String>
     match source["kind"].as_str() {
         Some("inline") => {
             let data = source["data"].as_str().unwrap_or_default();
-            let raw = BASE64
-                .decode(data)
-                .map_err(|_| "Unified Harness image data is not valid base64".to_owned())?;
+            let raw = BASE64.decode(data).map_err(|_| {
+                "The Unified Harness could not decode the image data as base64".to_owned()
+            })?;
             check_image_size(raw.len())?;
             Ok(json!({"type": "image", "data": data, "mimeType": mime_type}))
         }
@@ -355,7 +357,7 @@ fn harness_image(attachment: &Value, roots: &[PathBuf]) -> Result<Value, String>
                 vibe_core::platform::canonicalize(&path).unwrap_or_else(|_| path.clone());
             if !roots.iter().any(|root| resolved.starts_with(root)) {
                 return Err(format!(
-                    "Image file is outside the workspace or session attachments: {}",
+                    "The image file lies outside both the workspace and the session attachments: {}",
                     resolved.display()
                 ));
             }
@@ -386,7 +388,7 @@ fn harness_image(attachment: &Value, roots: &[PathBuf]) -> Result<Value, String>
             }))
         }
         other => Err(format!(
-            "Unified Harness message input does not support image source kind: {}",
+            "The Unified Harness message input cannot take an image of source kind: {}",
             other.map_or_else(|| "None".to_owned(), |kind| format!("'{kind}'"))
         )),
     }
@@ -394,7 +396,9 @@ fn harness_image(attachment: &Value, roots: &[PathBuf]) -> Result<Value, String>
 
 fn check_image_size(size: usize) -> Result<(), String> {
     if size > MAX_IMAGE_BYTES {
-        return Err(format!("Image is too large: {size} > {MAX_IMAGE_BYTES}"));
+        return Err(format!(
+            "The image exceeds the size limit: {size} > {MAX_IMAGE_BYTES}"
+        ));
     }
     Ok(())
 }
@@ -444,7 +448,7 @@ pub(super) fn mentioned_file_blocks(text: &str, cwd: &Path) -> Result<Vec<Value>
         .collect();
     if files.len() > MENTIONED_FILE_MAX_FILES {
         return Err(format!(
-            "Too many file mentions: {MENTIONED_FILE_MAX_FILES} maximum"
+            "A prompt may mention at most {MENTIONED_FILE_MAX_FILES} files"
         ));
     }
     files

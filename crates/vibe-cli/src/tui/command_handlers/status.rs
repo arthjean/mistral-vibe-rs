@@ -14,9 +14,9 @@ pub(super) fn status_document(stats: &Stats) -> String {
         }
     };
     format!(
-        "## Agent Statistics\n\n- **Steps**: {}\n- **Session Prompt Tokens**: {}{}\n- **Session \
-         Completion Tokens**: {}\n- **Session Total LLM Tokens**: {}\n- **Last Turn Tokens**: \
-         {}{}\n- **Cost**: ${:.4}\n",
+        "## Agent Statistics\n\n- **Steps**: {}\n- **Prompt Tokens This Session**: {}{}\n- \
+         **Completion Tokens This Session**: {}\n- **All LLM Tokens This Session**: {}\n- \
+         **Tokens in the Latest Turn**: {}{}\n- **Cost**: ${:.4}\n",
         thousands(stats.steps),
         thousands(stats.session_prompt_tokens),
         cached(stats.session_cached_tokens),

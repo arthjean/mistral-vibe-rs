@@ -119,7 +119,7 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
         builtin_agent(
             SMART_APPROVE,
             "Smart Approve",
-            "Classifies each tool call and auto-runs the safe ones, prompting only for risky ones",
+            "Judges every tool call, runs the harmless ones by itself and asks before anything risky",
             AgentKind::Agent,
             "smart",
             toml_table([("disabled_tools", string_array(["exit_plan_mode"]))]),
@@ -152,7 +152,7 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
         builtin_agent(
             "lean",
             "Lean",
-            "Specialized mode for Lean 4 code analysis, proof assistance, and theorem proving",
+            "A Lean 4 mode for reading code, helping with proofs and proving theorems",
             AgentKind::Agent,
             "neutral",
             toml_table([

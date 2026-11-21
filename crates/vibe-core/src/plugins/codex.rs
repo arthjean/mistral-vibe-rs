@@ -846,7 +846,7 @@ fn report_agent_metadata(
         {
             continue;
         }
-        diagnostics.push(diagnostic(FORMAT, "agent_metadata_unsupported", resolved.clone(), "Codex agent and per-skill presentation metadata is kept as package data and becomes no capability.", "agent_metadata", Severity::Info));
+        diagnostics.push(diagnostic(FORMAT, "agent_metadata_unsupported", resolved.clone(), "Presentation metadata for the Codex agent and its skills stays package data and grants no capability.", "agent_metadata", Severity::Info));
         unsupported.push(unsupported_component(
             UnsupportedKind::AgentMetadata,
             resolved,

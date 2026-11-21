@@ -18,10 +18,11 @@ pub(super) const ADD_USAGE: &str = "Usage: /mcp add <url> [--name <alias>] [--sc
 
 pub(super) fn add_help() -> String {
     format!(
-        "{ADD_USAGE}\n\nOAuth-only shortcut for hosted MCP servers.\nDefaults to streamable-http; \
-         pass --transport http for servers documented with\nHTTP transport.\nPass \
-         --allow-insecure-http to allow a plaintext http:// URL on a non-localhost\nhost, such as \
-         a server on the LAN.\nFor API-key/static auth, edit config.toml."
+        "{ADD_USAGE}\n\nA shortcut for hosted MCP servers that sign in with OAuth.\nThe transport is \
+         streamable-http unless you pass --transport http, for servers\nwhose documentation names \
+         HTTP.\n--allow-insecure-http admits a plaintext http:// URL whose host is not\nlocalhost, \
+         a LAN server for instance.\nServers using an API key or static auth are set up in \
+         config.toml."
     )
 }
 
@@ -95,10 +96,8 @@ pub(super) fn parse_add(arguments: &str) -> Result<AddArguments, String> {
                         "http" => "http",
                         "streamable-http" => "streamable-http",
                         _ => {
-                            return Err(
-                                "MCP server transport must be one of: http, streamable-http."
-                                    .to_owned(),
-                            );
+                            return Err("MCP server transport has to be http or streamable-http."
+                                .to_owned());
                         }
                     };
                 transport_seen = true;

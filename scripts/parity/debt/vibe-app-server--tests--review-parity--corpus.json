@@ -1,167 +1,579 @@
 {
   "corpus": "crates/vibe-app-server/tests/review-parity/corpus.json",
-  "measuredAgainst": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4",
-  "schemaVersion": 1,
+  "measuredAgainst": "a061169d8b50bb178ed996b160654dca88b75c62c13f78918880b9e4d8f5d7b7",
+  "schemaVersion": 2,
   "tallies": {
     "review parity:": {
       "compaction/decisions-across-the-boundary": {
-        "/*/context/*": 6,
-        "/*/context/*/content": 1,
-        "/*/files/notes.txt": 2,
-        "/*/response/error": 6,
-        "/*/response/result": 6
+        "/*/context/*": {
+          "count": 6,
+          "fingerprint": "206aca470f166396",
+          "level": "exact"
+        },
+        "/*/context/*/content": {
+          "count": 1,
+          "fingerprint": "4abc3b31618dbf1c",
+          "level": "exact"
+        },
+        "/*/files/notes.txt": {
+          "count": 2,
+          "fingerprint": "04bf68868654ae40",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 6,
+          "fingerprint": "69fc2108e687bc5c",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 6,
+          "fingerprint": "9a4f88e459615028",
+          "level": "exact"
+        }
       },
       "compaction/reads-across-the-boundary": {
-        "/*/context/*": 6,
-        "/*/context/*/content": 1,
-        "/*/response/error": 9,
-        "/*/response/result": 9
+        "/*/context/*": {
+          "count": 6,
+          "fingerprint": "206aca470f166396",
+          "level": "exact"
+        },
+        "/*/context/*/content": {
+          "count": 1,
+          "fingerprint": "4abc3b31618dbf1c",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "03c93189e1f30320",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "5eee747905cc10f7",
+          "level": "exact"
+        }
       },
       "decide/all-approve": {
-        "/*/response/error": 4,
-        "/*/response/result": 4
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "7d5b61692bba1ec7",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "6f9ed2876e3d6ea1",
+          "level": "exact"
+        }
       },
       "decide/all-revert": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 3,
-        "/*/response/result": 3
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "61339912ac586239",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 3,
+          "fingerprint": "7e8fa76c21e39619",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 3,
+          "fingerprint": "65513446ab2e336c",
+          "level": "exact"
+        }
       },
       "decide/file": {
-        "/*/response/error": 4,
-        "/*/response/result": 4
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "03bf35bbe22473b8",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "85c2c2b90dee68ea",
+          "level": "exact"
+        }
       },
       "decide/last-turns": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 7,
-        "/*/response/result": 7
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "590be865fefb4569",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 7,
+          "fingerprint": "d9bb83807ce96a1d",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 7,
+          "fingerprint": "298a4a75c829fb4e",
+          "level": "exact"
+        }
       },
       "decide/path-spellings": {
-        "/*/files/notes.txt": 2,
-        "/*/response/error": 4,
-        "/*/response/result": 4
+        "/*/files/notes.txt": {
+          "count": 2,
+          "fingerprint": "fb43fdbfb55403f4",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "6a506c8271b913f8",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "b86ca8338dbd2e43",
+          "level": "exact"
+        }
       },
       "decide/region": {
-        "/*/response/error": 4,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 4
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "0832693d373c3360",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "cca882ffd6a4b13b",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "50adc9cf74707e63",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "93ec02435cbee21c",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "2f0675778b6a97f7",
+          "level": "exact"
+        }
       },
       "decide/regions": {
-        "/*/response/error": 2,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "55242c64e0f87dc2",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "11748095463596f1",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "fddb49326d4bb165",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "8e61998c05a18fe5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "2ddf830e0a6f42f3",
+          "level": "exact"
+        }
       },
       "decide/scope": {
-        "/*/files/notes.txt": 2,
-        "/*/response/error": 5,
-        "/*/response/result": 5
+        "/*/files/notes.txt": {
+          "count": 2,
+          "fingerprint": "a5285f3b0b158c06",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 5,
+          "fingerprint": "89cf3502e2e07b67",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 5,
+          "fingerprint": "d1661fd94c0495ea",
+          "level": "exact"
+        }
       },
       "decide/scope-file": {
-        "/*/response/error": 9,
-        "/*/response/result": 9
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "9a14fdaa4f78ea11",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "6c22eb747c65c6d1",
+          "level": "exact"
+        }
       },
       "encoding/hand-edits": {
-        "/*/response/error": 16,
-        "/*/response/result": 16
+        "/*/response/error": {
+          "count": 16,
+          "fingerprint": "0e36b44c2defde0d",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 16,
+          "fingerprint": "27dcabb306c8ab4f",
+          "level": "exact"
+        }
       },
       "manual/before-a-decision": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "a6c944ad7c699545",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "d9c2ea0240d6791b",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "e35e3b5405f35001",
+          "level": "exact"
+        }
       },
       "manual/between-turns": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 10,
-        "/*/response/result": 10
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "75e7cdf31ac72caa",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 10,
+          "fingerprint": "8b3b3fb2c2495c8d",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 10,
+          "fingerprint": "9910dd20fe717a16",
+          "level": "exact"
+        }
       },
       "manual/reading-an-untracked-file": {
-        "/*/files/other.txt": 1,
-        "/*/response/error": 8,
-        "/*/response/result": 8
+        "/*/files/other.txt": {
+          "count": 1,
+          "fingerprint": "5193b3884c9be3a4",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 8,
+          "fingerprint": "8ac755fe69d352f5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 8,
+          "fingerprint": "da21c2e83fdaa1f3",
+          "level": "exact"
+        }
       },
       "opaque/hand-written-bytes": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 9,
-        "/*/response/result": 9
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "0fb457945df7bccc",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "e29622e03e57328a",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "4f0e47e83bdcde4c",
+          "level": "exact"
+        }
       },
       "paths/outside-the-workspace": {
-        "/*/response/error": 5,
-        "/*/response/result": 5
+        "/*/response/error": {
+          "count": 5,
+          "fingerprint": "b206a36f8c6a9f10",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 5,
+          "fingerprint": "8e39e261a5c16230",
+          "level": "exact"
+        }
       },
       "paths/through-a-symlink": {
-        "/*/files/real.txt": 1,
-        "/*/response/error": 9,
-        "/*/response/result": 9
+        "/*/files/real.txt": {
+          "count": 1,
+          "fingerprint": "fde9046a8a4e3618",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "6cbb528d66d793ea",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "d42c864bb2a22391",
+          "level": "exact"
+        }
       },
       "read/after-three-turns": {
-        "/*/response/error": 13,
-        "/*/response/result": 13
+        "/*/response/error": {
+          "count": 13,
+          "fingerprint": "8d6696706f991218",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 13,
+          "fingerprint": "3f91d0dd599b0fcc",
+          "level": "exact"
+        }
       },
       "read/before-any-turn": {
-        "/*/response/error": 4,
-        "/*/response/result": 4
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "5cdc40a01dcc7d82",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "5dbfe5f0d9157f27",
+          "level": "exact"
+        }
       },
       "read/path-spellings": {
-        "/*/response/error": 7,
-        "/*/response/result": 7
+        "/*/response/error": {
+          "count": 7,
+          "fingerprint": "525c3ca799327a20",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 7,
+          "fingerprint": "33142382ee2a2330",
+          "level": "exact"
+        }
       },
       "refuse/decision-parameters": {
-        "/*/response/error": 8,
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3,
-        "/*/response/result": 8
+        "/*/response/error": {
+          "count": 8,
+          "fingerprint": "452259b81d424d48",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "2a49d716cda4c970",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "06a179506b1037b1",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 8,
+          "fingerprint": "764b29bc3afd5380",
+          "level": "exact"
+        }
       },
       "refuse/read-parameters": {
-        "/*/response/error": 5,
-        "/*/response/result": 5
+        "/*/response/error": {
+          "count": 5,
+          "fingerprint": "3bf2bd6ceff1af1f",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 5,
+          "fingerprint": "a037bdb1d589cd5e",
+          "level": "exact"
+        }
       },
       "rewind/fork-restoring-files": {
-        "/*/files/notes.txt": 1,
-        "/*/notifications/*": 1,
-        "/*/response/error": 4,
-        "/*/response/result": 4,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "b84e9d421b39816e",
+          "level": "exact"
+        },
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "d617aa7e07f4d8e8",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "f0e55568428ce2b5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "3daaca2e206ee465",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "d4113d8382920161",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "a6c0220978c9508f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "980f4d30722c94a0",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "ce5c6ddf79721361",
+          "level": "exact"
+        }
       },
       "rewind/in-place": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 9,
-        "/*/response/result": 9,
-        "/*/response/result/state/history/*/detail/input/changes": 1,
-        "/*/response/result/state/history/*/detail/input/newString": 1,
-        "/*/response/result/state/history/*/detail/input/oldString": 1,
-        "/*/response/result/state/history/*/detail/input/replaceAll": 1,
-        "/*/response/result/state/history/*/detail/toolName": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/history/*/state/display/message": 1,
-        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": 1,
-        "/*/response/result/state/history/*/state/output/previousContent": 1,
-        "/*/response/result/state/history/*/title": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "301d1482cc5cf5a4",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "5248bf0c185b0506",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "dc530f12aced23fe",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/changes": {
+          "count": 1,
+          "fingerprint": "4e6cb1cc87fbe231",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "43a81db1d757e281",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1edae70b94b3810a",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "2a0f7960f9022486",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/detail/toolName": {
+          "count": 1,
+          "fingerprint": "1a263baca89a4da6",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "8a6848a714ae53dd",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/display/message": {
+          "count": 1,
+          "fingerprint": "35352d5ac99b329b",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": {
+          "count": 1,
+          "fingerprint": "69f29b26ac51db47",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "825524d6579370f6",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/title": {
+          "count": 1,
+          "fingerprint": "22f5491b91b64885",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "a6c0220978c9508f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "f70bc2f8e63ef6ab",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "ce5c6ddf79721361",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "4fd77a7b47aa5d72",
+          "level": "exact"
+        }
       },
       "shell/deletion": {
-        "/*/files/notes.txt": 1,
-        "/*/response/error": 9,
-        "/*/response/result": 9
+        "/*/files/notes.txt": {
+          "count": 1,
+          "fingerprint": "5c5a02b778d44cb9",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 9,
+          "fingerprint": "e29622e03e57328a",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 9,
+          "fingerprint": "4f0e47e83bdcde4c",
+          "level": "exact"
+        }
       },
       "shell/revert-into-a-removed-directory": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "55242c64e0f87dc2",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "2ddf830e0a6f42f3",
+          "level": "exact"
+        }
       },
       "turn/reads-and-decisions-while-it-runs": {
-        "/*/response/error": 11,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 11
+        "/*/response/error": {
+          "count": 11,
+          "fingerprint": "ce7449d912134a86",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "b8f4d482d98f5efa",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "00b8739bb810a3d2",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "a54ed603de962b54",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 11,
+          "fingerprint": "be17624c0ce875a3",
+          "level": "exact"
+        }
       }
     }
   }

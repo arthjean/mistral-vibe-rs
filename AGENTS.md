@@ -84,9 +84,15 @@ documentation use the Linux form; read them relative to the local checkout.
   the one place that resolves and checks the attested environment and
   re-executes a driver; a driver never
   imports another driver, only shared modules and its own `<driver>_cases.py`
-  or `<driver>_scenarios.py` data table. A table holds pure data and imports
-  neither the driver nor `vibe`; a scenario written as a closure that drives
-  the reference stays in its driver, however long that makes the driver.
+  or `<driver>_scenarios.py` data table. A driver is a module the manifest's
+  driver commands or `repin_plan.json` name, or one of `scripts/parity/` that
+  parses a command line (imports `argparse` under a `__main__` guard); every
+  other module there is shared, `debt.py` included. A table holds pure data,
+  imports the standard library only, and is imported by its own driver alone;
+  a scenario written as a closure that drives the reference stays in its
+  driver, however long that makes the driver. `scripts/parity/import_rules.py`
+  checks these rules by syntax inside `cargo test`
+  (`vibe_core::parity::import_rules_tests`).
 - Rust parity tests replay committed corpora unconditionally and gate only the
   live probe, on `vibe_core::parity::live::gate`: a host other than Linux,
   where the corpora are captured, and a missing environment skip, and one that
@@ -112,7 +118,12 @@ documentation use the Linux form; read them relative to the local checkout.
   that agree) and the manifest records against the corpus SHA-256. A
   difference outside the debt fails the replay, and so does a debt group that
   moves, so an unchanged corpus's debt only shrinks; a `Note` explains a debt
-  group and counts nothing. An entry over a whole top-level observation lists
+  group and counts nothing. A group a `Tally` fills also pins a fingerprint of
+  what the port answers inside it, at the firmest level the measuring runs
+  agree on (each pointer with its value, the values, or their shapes), and a
+  Linux replay fails on a pin that moves even when the count holds, until
+  `repin.py debt` records the change; that is what lets the sensitivity pass
+  see a mutation inside a known gap. An entry over a whole top-level observation lists
   the sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
   `vibe_core::parity::figures::assert_figures` against its line of the
   "Measured figures" table in `docs/parity.md`; a run appends what it counted
@@ -177,7 +188,15 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 home="$(mktemp -d)"
 env -u FORCE_COLOR VIBE_HOME="$home" cargo test --workspace --all-features --no-fail-fast
 chmod -R u+w "$home" && rm -rf "$home"
+(cd scripts/parity && uvx ruff@0.15.2 check . && uvx mypy==2.4.1)
 ```
+
+The last line lints and type-checks the parity scripts under
+`scripts/parity/pyproject.toml`, at the versions
+`scripts/parity/lint-requirements.txt` pins for the CI `quality` job
+(`workflow_tests` fails when the two disagree). mypy checks every function
+body, and treats `vibe` and the libraries only a reference environment holds
+as untyped.
 
 `--all-features` is load-bearing: `vibe-app-server`'s `test-fixtures` feature
 gates the fixture binary that `tests/mcp_stdio_e2e.rs` drives, so the file
@@ -218,10 +237,12 @@ Winsock fails to start), as `crates/vibe-cli/tests/support` and
 ## Architecture
 
 `[workspace.metadata.vibe] dependency-layers` in `Cargo.toml` declares the
-layering. No test enforces it, so check any new dependency edge by hand: a
-crate never depends on a crate in a later layer.
+layering: every workspace member sits in exactly one layer, and a crate never
+depends on a crate in a later layer, through a normal, build or dev-dependency
+alike. `vibe_core::workspace_layers_tests` reads both from `cargo metadata`
+and names the edge that breaks them.
 
-1. `vibe-protocol`, `vibe-core`
+1. `vibe-protocol`, `vibe-core`, `vibe-e2e`
 2. `vibe-harness`
 3. `vibe-app-server`, `vibe-voice`
 4. `vibe-cli`, `vibe-acp`
@@ -232,6 +253,8 @@ crate never depends on a crate in a later layer.
   variants; relaxing that makes variant declaration order silently load-bearing.
 - `vibe-core` owns provider-neutral contracts: engine, tools, config, storage,
   policy, process, and platform.
+- `vibe-e2e` owns the hermetic end-to-end harness the adapters' `e2e` test
+  targets build on, a dev-dependency only, and depends on no workspace crate.
 - `vibe-harness` owns the Unified Harness core a unified session runs on: its
   state and projection, the turn engine, the code-mode sandbox, the approval
   gate contract, and the session store. What a host provides (MCP servers,

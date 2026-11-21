@@ -181,8 +181,8 @@ fn is_mistral(provider: &toml::Table) -> bool {
         == "mistral"
 }
 
-/// Reference `get_mistral_provider`: the active provider when it is a
-/// Mistral one, the first Mistral provider otherwise.
+/// Reference `get_mistral_provider`: the active provider if Mistral serves
+/// it, else the first Mistral provider configured.
 fn mistral_provider(snapshot: &ConfigSnapshot) -> Option<toml::Table> {
     snapshot
         .active_provider()

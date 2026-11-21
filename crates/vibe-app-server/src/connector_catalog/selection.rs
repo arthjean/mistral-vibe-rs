@@ -172,7 +172,7 @@ pub(crate) fn validate_toggle(alias: &str, tool_name: Option<&str>) -> Result<()
     if let Some(tool_name) = tool_name
         && (tool_name.trim().is_empty() || tool_name.chars().count() > MAX_PUBLIC_NAME_CHARACTERS)
     {
-        return Err("Connector tool name must contain 1 to 256 characters");
+        return Err("A connector tool name needs between 1 and 256 characters");
     }
     Ok(())
 }

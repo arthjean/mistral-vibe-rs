@@ -341,7 +341,7 @@ fn open_regular(path: &Path) -> Result<(fs::File, fs::Metadata), String> {
         .map_err(|error| pycompat::os_error(&error, Some(path)))?;
     if metadata.is_dir() {
         return Err(format!(
-            "Path is a directory, not a file: {}",
+            "Expected a file, but this path is a directory: {}",
             path.display()
         ));
     }
@@ -389,9 +389,7 @@ fn read_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, Str
         } else if offset == -1 {
             lines.len().saturating_sub(1)
         } else {
-            return Err(
-                "offset must be greater than or equal to 0, or -1 to read the last line".to_owned(),
-            );
+            return Err("offset has to be 0 or more, or -1 for the last line".to_owned());
         };
         let (content, truncated) = read_page(&lines, start, limit);
         let returned = content.len();
@@ -410,7 +408,7 @@ fn read_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, Str
         ));
     }
     Err(format!(
-        "Could not decode text file with supported encodings: {}",
+        "None of the supported encodings could decode this text file: {}",
         path.display()
     ))
 }
@@ -454,7 +452,7 @@ fn write_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, St
     }
     if path.is_dir() {
         return Err(format!(
-            "Path is a directory, not a file: {}",
+            "Expected a file, but this path is a directory: {}",
             path.display()
         ));
     }
@@ -514,7 +512,7 @@ fn search_replace(arguments: &Value, workspace: &Workspace) -> Result<ToolResult
     let (mut file, metadata) = open_regular(&path)?;
     if metadata.len() > MAX_EDIT_FILE_SIZE_BYTES {
         return Err(format!(
-            "File exceeds {MAX_EDIT_FILE_SIZE_BYTES} byte edit limit: {}",
+            "Edits are limited to files of {MAX_EDIT_FILE_SIZE_BYTES} bytes, and this one is larger: {}",
             path.display()
         ));
     }
@@ -538,7 +536,7 @@ fn search_replace(arguments: &Value, workspace: &Workspace) -> Result<ToolResult
     }
     let (original, encoding) = decoded.ok_or_else(|| {
         format!(
-            "Could not decode text file with supported encodings: {}",
+            "None of the supported encodings could decode this text file: {}",
             path.display()
         )
     })?;
@@ -562,7 +560,7 @@ fn search_replace(arguments: &Value, workspace: &Workspace) -> Result<ToolResult
         }
         if matches > 1 && !replace_all {
             return Err(format!(
-                "block {index}: old_str is not unique; found {matches} matches in {}",
+                "block {index}: old_str occurs {matches} times, not once, in {}",
                 path.display()
             ));
         }

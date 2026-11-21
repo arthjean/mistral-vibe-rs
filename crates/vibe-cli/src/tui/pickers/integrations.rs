@@ -226,7 +226,7 @@ pub fn mcp_detail_overlay(sources: &[McpSource], target: &IntegrationTarget) -> 
         // The browser's `r` binding performs the refresh the instruction names.
         vec![row(
             "mcp-detail:setup",
-            "Set up credentials in the Mistral dashboard, then press r to refresh.",
+            "Press r to refresh once the Mistral dashboard holds your credentials.",
             "",
         )]
     } else {
@@ -398,13 +398,13 @@ pub fn mcp_auth_overlay(
         IntegrationKind::McpServer => (
             format!("MCP Server: {source}"),
             "This MCP server requires authentication",
-            "Press enter to open auth in your browser",
-            "Once authenticated in your browser, return to Vibe",
+            "Press enter to sign in through your browser",
+            "After signing in on the browser, come back to Vibe",
         ),
         IntegrationKind::Connector => (
             format!("Connector: {source}"),
             "This connector requires authentication",
-            "Press Enter to open auth in your browser",
+            "Press Enter to sign in through your browser",
             "Once authenticated, press r to refresh",
         ),
     };

@@ -128,7 +128,7 @@ const COMMON_PROSE: &[OwnProse] = &[
     own(
         &["*"],
         "/*/stream/*/message/params/update/content/text",
-        16,
+        17,
         Band::DEFAULT,
         EDITOR_PROSE,
         "what a slash command answers with: a compaction, the data retention notice, the \
@@ -167,6 +167,14 @@ const COMMON_PROSE: &[OwnProse] = &[
         "the same names, as the update a mode change sends",
     ),
     own(
+        &["command/lean"],
+        "/*/stream/*/message/params/update/configOptions/*/options/*/description",
+        1,
+        Band::DEFAULT,
+        EDITOR_PROSE,
+        "the description of the Lean agent the mode option offers after a mode change",
+    ),
+    own(
         &["command/compact"],
         "/*/stream/*/message/params/update/title",
         2,
@@ -194,7 +202,7 @@ const PROSE: &[OwnProse] = &[
     own(
         &["*"],
         "/*/response/error/message",
-        36,
+        38,
         Band::DEFAULT,
         SERVER_PROSE,
         "the message of every other refusal the agent answers with",

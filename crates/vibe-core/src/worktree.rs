@@ -11,8 +11,8 @@
 //! - [`WorktreeRepository`], the managed worktrees of one repository: prepare
 //!   a named one, prepare one named for a prompt, list the linked ones, put a
 //!   retained one back (`repository.py:237-1062`);
-//! - [`ManagedWorktree`], one worktree Vibe created, addressed by a path inside
-//!   it: who holds it, releasing it, and the retention sweep
+//! - [`ManagedWorktree`], a worktree this port made, found from any path within
+//!   it: its holders, letting go of it, and the retention sweep
 //!   (`repository.py:663-1099`);
 //! - the claims under `<vibe home>/worktrees/.claims`, which is how two
 //!   processes agree on who owns and who occupies a worktree (`record.py`);
@@ -236,11 +236,11 @@ impl WorktreeCleanupState {
     }
 }
 
-/// The managed worktrees of one git repository.
+/// Every worktree this port manages for a single git repository.
 ///
-/// Opened against a path inside the repository rather than the repository
-/// root, because that path decides two things at once: which repository is
-/// meant, and which subdirectory of a prepared worktree the caller lands in
+/// It is built from some path below the repository, not from its top level:
+/// that one path both identifies the repository and fixes the subdirectory a
+/// caller ends up in once a worktree is ready
 /// (`vibe/core/git/worktree/repository.py:237-247`).
 #[derive(Debug)]
 pub struct WorktreeRepository {
@@ -310,7 +310,7 @@ impl WorktreeRepository {
         self.git.relative_base(&self.base)
     }
 
-    /// Where the base sits when mapped onto the primary checkout, under the
+    /// The base's position translated into the primary checkout, under the
     /// checks [`WorktreeRepository::linked`] applies, or [`None`] when it has
     /// no usable counterpart there (`vibe/core/git/worktree/repository.py:273-293`).
     #[must_use]
@@ -505,7 +505,7 @@ impl WorktreeRepository {
         self.git.changes_on(branch)
     }
 
-    /// The ref a newly created branch starts from: the remote's default branch,
+    /// The ref a fresh branch forks from: the default branch of the remote,
     /// refreshed first when the remote answers, or [`None`] to leave git's own
     /// default of the invoking checkout's `HEAD`.
     ///
@@ -653,9 +653,9 @@ impl WorktreeRepository {
 
     /// The record of a worktree now on disk.
     ///
-    /// The base commit is the worktree's own `HEAD` at session start, so
-    /// cleanup counts only commits added during the session, not those an
-    /// attached branch already carried (`vibe/core/git/worktree/repository.py:586-608`).
+    /// Its base commit is the `HEAD` the worktree had when the session began,
+    /// so a later cleanup weighs only what the session committed, never the
+    /// history an attached branch brought along (`vibe/core/git/worktree/repository.py:586-608`).
     fn build_prepared(
         &self,
         name: &str,
@@ -684,8 +684,9 @@ impl WorktreeRepository {
     /// The first free name for an automatic worktree, with its branch and its
     /// claimed directory.
     ///
-    /// The `mkdir` is the atomic claim: `git worktree add` cannot say why it
-    /// failed, so a lost race has to be detected before git runs
+    /// Creating the directory is what claims the name atomically, since
+    /// `git worktree add` gives no reason when it fails: losing a race must
+    /// show up before git is invoked
     /// (`vibe/core/git/worktree/repository.py:610-635`).
     fn claim_auto_name(&self, base_name: &str) -> Result<(String, String, PathBuf), WorktreeError> {
         let worktree_root = self.worktree_root()?;
@@ -721,8 +722,9 @@ impl WorktreeRepository {
 
     /// Takes back a reservation whose `git worktree add` failed.
     ///
-    /// `rmdir` refuses a populated directory, so a partial checkout is never
-    /// lost. Only a branch this reservation created is deleted, and safely, so
+    /// Removal goes through `rmdir`, which fails on anything with contents, so a
+    /// half-done checkout survives. The branch goes only if this reservation
+    /// made it, and through a safe delete, so
     /// a racing branch carrying commits survives
     /// (`vibe/core/git/worktree/repository.py:637-661`).
     fn discard_claim(&self, target: &Path, branch: &str, branch_created: bool) {
@@ -794,9 +796,9 @@ fn create_directory(target: &Path) -> std::io::Result<()> {
 
 /// The name an automatic worktree starts from.
 ///
-/// The model's answer and the raw prompt go through the same slugifier, and
-/// either can reduce to nothing or to a reserved device name, hence the walk
-/// down to a random slug (`vibe/core/git/worktree/repository.py:1103-1114`).
+/// Both the naming model's suggestion and the prompt text are slugified alike,
+/// and each may collapse to an empty string or a reserved device name, which is
+/// why a random slug is the last fallback (`vibe/core/git/worktree/repository.py:1103-1114`).
 #[must_use]
 pub fn auto_worktree_name(prompt: Option<&str>, suggested: Option<&str>) -> String {
     [suggested, prompt]

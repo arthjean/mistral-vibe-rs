@@ -426,8 +426,8 @@ pub(super) fn find_git_bash_under(
         .find(|candidate| candidate.is_file())
 }
 
-/// Reference `_is_wsl_launcher`: the stubs that forward into a Linux VM with
-/// its own filesystem, which is not a drop-in shell for the workspace.
+/// Reference `_is_wsl_launcher`: launcher stubs that hand off to a Linux VM
+/// whose filesystem is separate, so they cannot stand in as the workspace shell.
 pub(super) fn is_wsl_launcher(candidate: &Path) -> bool {
     let normalized = candidate
         .to_string_lossy()
@@ -577,13 +577,13 @@ pub(super) fn resolve_session_shell(
                 | (ShellFamily::PowerShell, WindowsShellKind::PowerShell) => {}
                 (ShellFamily::GitBash, _) => {
                     return Err(ToolError::Execution(format!(
-                        "Git Bash shell override must resolve to bash.exe, got {source}"
+                        "the Git Bash shell override points at {source}, which is not bash.exe"
                     )));
                 }
                 _ => {
                     return Err(ToolError::Execution(format!(
-                        "PowerShell shell override must resolve to pwsh.exe or powershell.exe, \
-                         got {source}"
+                        "the PowerShell shell override points at {source}, which is neither \
+                         pwsh.exe nor powershell.exe"
                     )));
                 }
             }

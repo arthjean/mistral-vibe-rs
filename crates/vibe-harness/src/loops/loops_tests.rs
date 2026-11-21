@@ -8,7 +8,7 @@ fn intervals_read_as_the_reference_reads_them() {
         parse_interval("10s")
             .unwrap_err()
             .0
-            .contains("at least 30s")
+            .contains("shorter than 30s")
     );
     assert!(
         parse_interval("5x")
@@ -42,7 +42,7 @@ fn a_cron_expression_fires_on_its_next_matching_minute() {
     assert!(
         next_cron_fire("bad", seconds)
             .unwrap_err()
-            .contains("5-field")
+            .contains("exactly 5 fields")
     );
     assert!(
         next_cron_fire("61 * * * *", seconds)
@@ -70,9 +70,9 @@ fn the_tool_schedules_lists_and_clears() {
     let ToolResult::Failure { message, .. } = refused else {
         panic!("accepted a bad expression");
     };
-    assert!(
-        message.starts_with("1 validation error for ScheduledPrompt\n  Value error, Cron must be")
-    );
+    assert!(message.starts_with(
+        "1 validation error for ScheduledPrompt\n  Value error, A cron schedule needs"
+    ));
     assert!(message.ends_with("input_type=dict]"));
     let cleared = loops.run_tool(&json!({"action": "clear"}));
     let ToolResult::Success {

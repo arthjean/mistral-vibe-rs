@@ -1,36 +1,92 @@
 {
   "corpus": "crates/vibe-core/tests/tool-descriptions/corpus.json",
   "measuredAgainst": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "tool descriptions parity:": {
       "a-directory-named-twice-keeps-its-first-position": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 3
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 3,
+          "fingerprint": "81fc352714508b61",
+          "level": "exact"
+        }
       },
       "a-relative-entry-anchors-on-the-working-directory": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 3
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 3,
+          "fingerprint": "81fc352714508b61",
+          "level": "exact"
+        }
       },
       "an-entry-naming-nothing-is-skipped": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 3
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 3,
+          "fingerprint": "81fc352714508b61",
+          "level": "exact"
+        }
       },
       "an-untrusted-workspace": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 2
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 2,
+          "fingerprint": "e560ac2183f8414f",
+          "level": "exact"
+        }
       },
       "configured-paths-precede-the-discovered-ones": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 3
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 3,
+          "fingerprint": "81fc352714508b61",
+          "level": "exact"
+        }
       },
       "no-configured-paths": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 3
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 3,
+          "fingerprint": "81fc352714508b61",
+          "level": "exact"
+        }
       },
       "the-user-source-disabled": {
-        "/descriptionsUnchanged": 1,
-        "/ignored/*": 1
+        "/descriptionsUnchanged": {
+          "count": 1,
+          "fingerprint": "9bb288cc7c5965a1",
+          "level": "exact"
+        },
+        "/ignored/*": {
+          "count": 1,
+          "fingerprint": "099498c540dc71a5",
+          "level": "exact"
+        }
       }
     }
   }

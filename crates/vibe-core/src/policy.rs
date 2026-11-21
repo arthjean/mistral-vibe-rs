@@ -112,8 +112,8 @@ pub struct PermissionRequirement {
     ///
     /// Reference `RequiredPermission.literal` (`vibe/permissions.py`), read by
     /// `PermissionStore.covers` (`vibe/core/tools/permissions.py:39-42`): a
-    /// scope recorded because nothing wider was honest must stay out of reach
-    /// of the wider grants, and its own text may carry glob characters. The
+    /// scope stored only because no broader one would have been truthful has
+    /// to stay beyond the broader grants, and its text may hold glob characters. The
     /// reference excludes it from serialization but still validates it, so it
     /// never reaches the wire and a payload that carries it still reads.
     #[serde(default, skip_serializing)]

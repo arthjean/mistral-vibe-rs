@@ -561,7 +561,7 @@ pub fn portable_skill_name(value: &str, prefix: &str) -> Result<String, String> 
         format!("{prefix}{normalized}")
     };
     if normalized.is_empty() {
-        return Err("skill name must contain an ASCII letter or digit".to_owned());
+        return Err("a skill name needs at least one ASCII letter or digit".to_owned());
     }
     if normalized.chars().count() <= MAX_SKILL_NAME_LENGTH {
         return Ok(normalized);
@@ -610,7 +610,7 @@ pub fn resolve_declared_path(root: &Path, value: &str) -> Result<PathBuf, String
     let relative = value.strip_prefix("./").unwrap_or(value);
     let pure = Path::new(relative);
     if pure.is_absolute() || pure.components().any(|part| part == Component::ParentDir) {
-        return Err("declared path must stay inside the plugin root".to_owned());
+        return Err("a declared path cannot leave the plugin root".to_owned());
     }
     let candidate = relative
         .split('/')
@@ -618,7 +618,7 @@ pub fn resolve_declared_path(root: &Path, value: &str) -> Result<PathBuf, String
         .fold(root.to_path_buf(), |path, part| path.join(part));
     let resolved = resolve_strict(&candidate).map_err(|error| error.to_string())?;
     if !is_relative_to(&resolved, root) {
-        return Err("declared path must resolve inside the plugin root".to_owned());
+        return Err("a declared path resolves outside the plugin root".to_owned());
     }
     Ok(resolved)
 }
@@ -678,7 +678,7 @@ pub(super) fn resolve_stdio_command(root: &Path, command: &str) -> Result<String
         return Ok(path_text(&resolved));
     }
     if command.contains('/') || command.contains('\\') || command == "." || command == ".." {
-        return Err("a stdio command must be a bare executable or start with './'".to_owned());
+        return Err("a stdio command is either a bare executable name or a './' path".to_owned());
     }
     Ok(command.to_owned())
 }

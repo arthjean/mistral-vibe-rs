@@ -135,7 +135,7 @@ pub(super) fn stdin_bytes(family: ShellFamily, arguments: &Value) -> Result<Vec<
     if supplied != 1 {
         return Err(ToolError::SchemaViolation {
             path: "/".to_owned(),
-            message: "supply exactly one of text, control or bytes_base64".to_owned(),
+            message: "provide a single input: text, control or bytes_base64".to_owned(),
         });
     }
     if let Some(text) = text {

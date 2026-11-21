@@ -67,18 +67,93 @@ pub trait KeyringBackend: Send + Sync {
     fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure>;
 }
 
-/// The `keyring` crate as a [`KeyringBackend`].
-#[derive(Default)]
+/// The variable the reference's `keyring` library reads first to choose its
+/// backend, ahead of its configuration file and of platform detection.
+pub const KEYRING_BACKEND_ENV_VAR: &str = "PYTHON_KEYRING_BACKEND";
+
+/// A backend of the reference's `keyring` library that holds no store, which
+/// [`KEYRING_BACKEND_ENV_VAR`] can name and this port then answers as.
+///
+/// Only these two are honored: every other value names a store the port
+/// already reaches natively or a Python class it cannot load, and keeps the
+/// native store. On macOS the reference reaches the Keychain for an API key
+/// through `/usr/bin/security`, whatever the variable says, so the port keeps
+/// the native store there too. The parity capture drivers set the variable
+/// on Windows (`scripts/parity/host_env.py`, `keyring_isolation`), where the
+/// absent session bus that keeps a Linux child off its store does nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorelessBackend {
+    /// `keyring.backends.fail.Keyring`: every primitive raises
+    /// `NoKeyringError`, what a Linux host without a Secret Service answers.
+    Fail,
+    /// `keyring.backends.null.Keyring`: a read finds nothing, and a write and a
+    /// removal succeed without storing or removing anything.
+    Null,
+}
+
+impl StorelessBackend {
+    /// The backend `value` names, on a host whose reference honors it there.
+    #[must_use]
+    pub fn named(value: Option<&str>, macos: bool) -> Option<Self> {
+        if macos {
+            return None;
+        }
+        match value? {
+            "keyring.backends.fail.Keyring" => Some(Self::Fail),
+            "keyring.backends.null.Keyring" => Some(Self::Null),
+            _ => None,
+        }
+    }
+
+    /// The backend this process's environment names.
+    fn from_env() -> Option<Self> {
+        let value = std::env::var(KEYRING_BACKEND_ENV_VAR).ok();
+        Self::named(value.as_deref(), cfg!(target_os = "macos"))
+    }
+
+    fn get(self) -> Result<Option<String>, KeyringFailure> {
+        match self {
+            Self::Fail => Err(KeyringFailure::NoBackend),
+            Self::Null => Ok(None),
+        }
+    }
+
+    fn write(self) -> Result<(), KeyringFailure> {
+        match self {
+            Self::Fail => Err(KeyringFailure::NoBackend),
+            Self::Null => Ok(()),
+        }
+    }
+}
+
+/// The `keyring` crate as a [`KeyringBackend`], or the storeless backend
+/// [`KEYRING_BACKEND_ENV_VAR`] names when it was built.
 pub struct NativeKeyringBackend {
     /// The platform stores are not all safe under concurrent mutation from one
     /// process, so the primitives serialize.
     serialization: Mutex<()>,
+    storeless: Option<StorelessBackend>,
+}
+
+impl Default for NativeKeyringBackend {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NativeKeyringBackend {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self::with_storeless(StorelessBackend::from_env())
+    }
+
+    /// The native store, or `storeless` in its place.
+    #[must_use]
+    pub fn with_storeless(storeless: Option<StorelessBackend>) -> Self {
+        Self {
+            serialization: Mutex::new(()),
+            storeless,
+        }
     }
 }
 
@@ -100,6 +175,9 @@ pub(super) fn map_native_error(error: keyring::Error) -> KeyringFailure {
 
 impl KeyringBackend for NativeKeyringBackend {
     fn get(&self, service: &str, account: &str) -> Result<Option<String>, KeyringFailure> {
+        if let Some(storeless) = self.storeless {
+            return storeless.get();
+        }
         let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {
@@ -121,6 +199,9 @@ impl KeyringBackend for NativeKeyringBackend {
     }
 
     fn set(&self, service: &str, account: &str, secret: &str) -> Result<(), KeyringFailure> {
+        if let Some(storeless) = self.storeless {
+            return storeless.write();
+        }
         let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {
@@ -140,6 +221,9 @@ impl KeyringBackend for NativeKeyringBackend {
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure> {
+        if let Some(storeless) = self.storeless {
+            return storeless.write();
+        }
         let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {

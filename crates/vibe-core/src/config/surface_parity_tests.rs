@@ -155,6 +155,11 @@ const WITHDRAWN_FIELDS: &[(&str, &str)] = &[
 ///
 /// An entry fails as stale when the two strategies agree again, and fails when
 /// either side moves to a third strategy.
+///
+/// It keeps its own tuple form rather than a `replay.rs` entry kind: an entry
+/// there admits differences at JSON pointers of a recorded observation,
+/// while this one pins a pair of named merge strategies the replay compares
+/// field by field, which no pointer, value admission or count expresses.
 const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 
 /// Strategies a reference field adopts that this port does not implement, each
@@ -879,7 +884,7 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home.clone(),
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         registry::default_document(),
     )
@@ -1044,7 +1049,7 @@ fn the_settings_rows_are_listed_in_the_reference_order() {
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         registry::default_document(),
     )
@@ -1231,12 +1236,83 @@ fn resolve_vibe_home(value: &JsonValue, home: &Path) -> JsonValue {
 fn every_model_scenario_validates_to_the_document_the_reference_validates() {
     let corpus = corpus();
     assert!(!corpus.model_scenarios.is_empty());
+    let (observed, unpinned_observed) = model_observations(&corpus, None);
+    let settled = reconcile(
+        "the validated model scenarios",
+        "config surface parity (models):",
+        &observed,
+        &[],
+    );
+    assert!(
+        unpinned_observed,
+        "no model scenario leaves `active_model` unpinned; drop the recorded \
+         divergence instead of carrying it"
+    );
+    let conformant = conforming(
+        corpus.model_scenarios.iter().map(|scenario| &scenario.name),
+        &observed,
+    );
+    println!(
+        "config surface: {}/{} model scenarios conform at {}",
+        conformant,
+        corpus.model_scenarios.len(),
+        &corpus.reference.commit[..12]
+    );
+    // Every observed divergence passed `reconcile`, so it is a recorded one.
+    assert_figures(
+        "config surface parity (models):",
+        LISTED,
+        settled.figures(conformant, corpus.model_scenarios.len()),
+        serde_json::json!({}),
+    );
+}
+
+/// A `.vibe/config.toml` above the fixture, where a Windows profile keeps
+/// `%USERPROFILE%\.vibe\config.toml` above `%TEMP%`, changes no model
+/// scenario: each fixture's project sits under the directory holding its Vibe
+/// home, where the project walk stops, so the walk never leaves the fixture.
+/// The planted file is not TOML, so reaching it would reject every scenario.
+#[test]
+fn a_configuration_above_the_fixture_changes_no_model_scenario() {
+    let corpus = corpus();
+    let enclosure = tempfile::tempdir().expect("an enclosing directory");
+    let planted = enclosure.path().join(".vibe");
+    fs::create_dir_all(&planted).expect("the planted directory");
+    fs::write(planted.join(CONFIG_FILE), "this is [not toml\n").expect("the planted file");
+    let key = |observed: Vec<Observed>| {
+        observed
+            .into_iter()
+            .map(|entry| (entry.case, entry.pointer, entry.reference, entry.port))
+            .collect::<Vec<_>>()
+    };
+    let (alone, _) = model_observations(&corpus, None);
+    let (enclosed, _) = model_observations(&corpus, Some(enclosure.path()));
+    assert_eq!(
+        key(enclosed),
+        key(alone),
+        "a configuration file above the fixture reached a model scenario"
+    );
+}
+
+/// Every model scenario validated in a fixture of its own, created under
+/// `enclosure` when one is given, and whether one left `active_model`
+/// unpinned.
+fn model_observations(
+    corpus: &Corpus,
+    enclosure: Option<&std::path::Path>,
+) -> (Vec<Observed>, bool) {
     let mut unpinned_observed = false;
     let mut observed = Vec::new();
     for scenario in &corpus.model_scenarios {
-        let temporary = tempfile::tempdir().expect("temporary root");
+        let temporary = match enclosure {
+            Some(directory) => tempfile::tempdir_in(directory),
+            None => tempfile::tempdir(),
+        }
+        .expect("temporary root");
+        // The project sits beside the Vibe home, under the directory the
+        // project walk stops at, so no file above the fixture is a layer.
         let home = temporary.path().join("home/.vibe");
-        let project = temporary.path().join("project");
+        let project = temporary.path().join("home/project");
         fs::create_dir_all(&home).expect("home directory");
         let mut config = LayeredConfig::new(
             ConfigPaths {
@@ -1388,34 +1464,7 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
             settings_rows_by_name(settings_rows(&snapshot)),
         );
     }
-    let settled = reconcile(
-        "the validated model scenarios",
-        "config surface parity (models):",
-        &observed,
-        &[],
-    );
-    assert!(
-        unpinned_observed,
-        "no model scenario leaves `active_model` unpinned; drop the recorded \
-         divergence instead of carrying it"
-    );
-    let conformant = conforming(
-        corpus.model_scenarios.iter().map(|scenario| &scenario.name),
-        &observed,
-    );
-    println!(
-        "config surface: {}/{} model scenarios conform at {}",
-        conformant,
-        corpus.model_scenarios.len(),
-        &corpus.reference.commit[..12]
-    );
-    // Every observed divergence passed `reconcile`, so it is a recorded one.
-    assert_figures(
-        "config surface parity (models):",
-        LISTED,
-        settled.figures(conformant, corpus.model_scenarios.len()),
-        serde_json::json!({}),
-    );
+    (observed, unpinned_observed)
 }
 
 #[test]
@@ -1573,7 +1622,7 @@ fn replay(scenario: &Scenario, observed: &mut Vec<Observed>) {
     let mut config = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home.clone(),
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         documents.next().unwrap_or_default(),
     );

@@ -57,8 +57,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
 
 SCHEMA_VERSION = 2
@@ -397,7 +398,7 @@ def main() -> int:
     parser.add_argument("--corpus", type=Path, nargs="?", const=DEFAULT_CORPUS, default=None)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true", help="recapture and compare")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     arguments = parser.parse_args()
     try:
         commit, command = reference_command(arguments.reference, "vibe", arguments.expected_commit)

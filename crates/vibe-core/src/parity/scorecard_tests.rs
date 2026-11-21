@@ -9,6 +9,11 @@
 //! table says one thing and the cell summarizing it says another. This module
 //! recomputes the total from the table, using the weights the same cell
 //! declares, and fails when the two disagree.
+//!
+//! The Method section also states how many capture scripts, runtime oracles
+//! and replay modules the tree holds, each beside the definition it counts
+//! by; a test here counts them the same way and fails when the document and
+//! the tree disagree.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -618,5 +623,159 @@ fn every_reference_module_is_claimed_and_every_cited_path_exists_at_the_pin() {
         "scorecard coverage: {} Python modules and {} client modules, all claimed",
         python.len(),
         client.len()
+    );
+}
+
+/// The section whose count table this module checks.
+const METHOD_SECTION: &str = "## Method";
+/// Where the capture scripts live.
+const CAPTURE_SCRIPTS: &str = "scripts/parity/";
+/// Where the runtime oracles live.
+const RUNTIME_ORACLES: &str = "crates/vibe-cli/tests/runtime-parity/";
+/// The replay library and its own tests, which conclude no replay.
+const REPLAY_LIBRARY: &str = "crates/vibe-core/src/parity/";
+/// What a replay module's source names: the call that asserts a line of
+/// "Measured figures", or the two builders that end by asserting one.
+const REPLAY_MARKERS: [&str; 3] = ["assert_figures(", "Tally::new(", "Replay {"];
+
+/// The number a row of the Method section's count table states, the row
+/// keyed by its first cell.
+fn stated_count(document: &str, label: &str) -> Option<usize> {
+    let mut inside = false;
+    for line in document.lines() {
+        if line.starts_with("## ") {
+            inside = line.trim() == METHOD_SECTION;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        let mut cells = line.trim_matches('|').split(" | ").map(str::trim);
+        if line.starts_with("| ") && cells.next() == Some(label) {
+            return cells.next().and_then(|cell| cell.parse().ok());
+        }
+    }
+    None
+}
+
+/// The programs of the manifest's driver commands that sit under `prefix`,
+/// deduplicated.
+fn driver_programs(
+    manifest: &serde_json::Value,
+    prefix: &str,
+) -> std::collections::BTreeSet<String> {
+    manifest["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry["driver"].get(0).and_then(serde_json::Value::as_str))
+        .filter(|program| program.starts_with(prefix) && program.ends_with(".py"))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Whether `source` names one of [`REPLAY_MARKERS`].
+fn concludes_a_replay(source: &str) -> bool {
+    REPLAY_MARKERS.iter().any(|marker| source.contains(marker))
+}
+
+/// Every `.rs` file under `crates/` outside [`REPLAY_LIBRARY`] whose source
+/// concludes a replay, as a path relative to `root`.
+fn replay_modules(root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.join("crates")];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            if path.is_dir() {
+                if entry.file_name() != "target"
+                    && !format!("{relative}/").starts_with(REPLAY_LIBRARY)
+                {
+                    pending.push(path);
+                }
+                continue;
+            }
+            let rust = path.extension().is_some_and(|extension| extension == "rs");
+            if rust && fs::read_to_string(&path).is_ok_and(|source| concludes_a_replay(&source)) {
+                found.push(relative);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn a_count_row_reads_from_the_method_section_only() {
+    let document = "\
+## Method
+
+| Count | Value | What counts |
+|---|---|---|
+| Capture scripts | 3 | x |
+| Replay modules | many | x |
+
+## Parity by part
+
+| Runtime oracles | 9 | x |
+";
+    assert_eq!(stated_count(document, "Capture scripts"), Some(3));
+    assert_eq!(stated_count(document, "Replay modules"), None);
+    assert_eq!(stated_count(document, "Runtime oracles"), None);
+    assert!(concludes_a_replay(
+        "    let mut tally = Tally::new(CORPUS, entries(PROSE));"
+    ));
+    assert!(!concludes_a_replay("use vibe_core::parity::replay::Tally;"));
+}
+
+#[test]
+fn the_method_section_states_the_counts_the_tree_holds() {
+    let root = repo_root();
+    let document = fs::read_to_string(root.join(SCORECARD)).expect("the scorecard is committed");
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(root.join(super::manifest::MANIFEST))
+            .expect("the manifest is committed"),
+    )
+    .expect("the manifest parses");
+    let replays = replay_modules(&root);
+    let counted = [
+        (
+            "Capture scripts",
+            driver_programs(&manifest, CAPTURE_SCRIPTS).len(),
+        ),
+        (
+            "Runtime oracles",
+            driver_programs(&manifest, RUNTIME_ORACLES).len(),
+        ),
+        ("Replay modules", replays.len()),
+    ];
+    let mut wrong = Vec::new();
+    for (label, count) in counted {
+        assert!(
+            count > 0,
+            "the tree holds no {label}, so this count read the wrong place"
+        );
+        match stated_count(&document, label) {
+            Some(stated) if stated == count => {}
+            Some(stated) => wrong.push(format!(
+                "{label}: the document states {stated}, the tree holds {count}"
+            )),
+            None => wrong.push(format!(
+                "{label}: no `| {label} | N |` row of `{METHOD_SECTION}` states a number"
+            )),
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "the counts of `{METHOD_SECTION}` disagree with the tree:\n  {}\nreplay modules:\n  {}",
+        wrong.join("\n  "),
+        replays.join("\n  ")
     );
 }

@@ -76,7 +76,7 @@ impl ServerConnection {
         let previous = self.server.session_plugins(session_id).ok_or_else(|| {
             ProtocolFault::plain(
                 ProtocolErrorCode::NotImplemented,
-                "This session has no plugin writer, so there is nothing to reload.",
+                "Nothing to reload: this session holds no plugin writer.",
             )
         })?;
         let reloaded = self.server.reload_session_plugins(session_id, &previous)?;

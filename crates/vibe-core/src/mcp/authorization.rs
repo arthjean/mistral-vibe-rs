@@ -439,8 +439,8 @@ impl McpAuthenticationService {
                 .cloned()
                 .unwrap_or_default();
             state.rejected_material.insert(name.to_owned(), material);
-            // Kept where the alias is shared: the stored credential may be the
-            // one another owner's server of that name is connected with.
+            // Left alone for a shared alias, since a different owner's server
+            // under that name could be using this very stored credential.
             !state.alias_is_shared(name)
                 && state.owned_server(name).is_some_and(|server| {
                     authorization_kind(&server) == McpAuthorizationKind::Oauth

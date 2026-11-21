@@ -1,7 +1,7 @@
 {
   "corpus": "crates/vibe-app-server/tests/experiments/corpus.json",
   "measuredAgainst": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "experiments startup parity:": {
       "experiments-disabled/cached": {

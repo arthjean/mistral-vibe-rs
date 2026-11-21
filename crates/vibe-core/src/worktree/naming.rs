@@ -2,9 +2,9 @@
 //!
 //! A bare `--worktree` and a session asking for a worktree of its own both
 //! leave the name to Vibe. It comes from the naming model's suggestion, else
-//! from the prompt, else from a random slug, and whichever it is goes through
-//! the same slugifier, so a name that reaches git is portable however it was
-//! produced (`vibe/core/git/worktree/naming.py`,
+//! from the prompt, else from a random slug, and every source is passed through
+//! one slugifier, which keeps whatever git receives portable whatever its
+//! origin (`vibe/core/git/worktree/naming.py`,
 //! `vibe/core/git/worktree/repository.py:1103-1119`).
 
 use super::slug_table::SLUG_PIECES;
@@ -16,8 +16,8 @@ pub const MAX_WORKTREE_NAME_LENGTH: usize = 40;
 /// How many words of the text a name keeps.
 const MAX_WORKTREE_NAME_WORDS: usize = 6;
 
-/// Trailing filler that reads as noise in a folder name. English only: text in
-/// another language keeps the word-boundary cut alone.
+/// Filler words dropped from the end of a folder name. The list is English;
+/// any other language gets only the cut at a word boundary.
 const STOP_WORDS: [&str; 15] = [
     "a", "an", "and", "at", "for", "in", "is", "it", "me", "my", "of", "on", "the", "to", "with",
 ];

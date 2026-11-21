@@ -396,6 +396,7 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
 
     let scratch = tempfile::tempdir().expect("tempdir");
     let mut tally = Tally::new(&text, []);
+    tally.differ(compare);
     for (index, case) in corpus.cases.iter().enumerate() {
         // A fresh session per case, so one case cannot read another's state.
         // The capture script isolates the same way.
@@ -476,13 +477,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = vibe_core::parity::replay::pinned_reference("tool execution") else {
         return;
     };
+    let run = vibe_core::parity::replay::RunDirectory::new("tool-execution");
     let repository = repo_root();
-    let recaptured = repository.join("target/tool-execution-corpus.json");
+    let recaptured = run.join("tool-execution-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/tool-execution-full.json"))
+        .arg(run.join("tool-execution-full.json"))
         .arg("--corpus")
         .arg(&recaptured)
         .current_dir(&repository)

@@ -56,12 +56,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
-from telemetry_session_scenarios import MISTRAL_PROVIDER, scenarios  # noqa: E402
+from telemetry_session_scenarios import ACP_INITIALIZE, MISTRAL_PROVIDER, scenarios  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/telemetry-session/corpus.json"
@@ -235,7 +237,7 @@ class World:
             directory.mkdir(parents=True, exist_ok=True)
 
 
-def environment(world: World, scenario: dict[str, Any], stand: Stand) -> dict[str, str]:
+def environment(world: World | blackbox.World, scenario: dict[str, Any], stand: Stand) -> dict[str, str]:
     env = host_env.isolated(
         world.home,
         world.vibe_home,
@@ -264,7 +266,7 @@ def learned_session(stdout: str) -> str | None:
 
 
 def run_programmatic(
-    scenario: dict[str, Any], command: list[str], env: dict[str, str], world: World, stand: Stand
+    scenario: dict[str, Any], command: list[str], env: dict[str, str], world: World | blackbox.World, stand: Stand
 ) -> list[dict[str, Any]]:
     runs = []
     session: str | None = None
@@ -369,7 +371,7 @@ class Terminal:
 
 
 def run_tui(
-    scenario: dict[str, Any], command: list[str], env: dict[str, str], world: World, stand: Stand
+    scenario: dict[str, Any], command: list[str], env: dict[str, str], world: World | blackbox.World, stand: Stand
 ) -> list[dict[str, Any]]:
     """One run: the client starts trusted, waits for its startup report, then
     types each line and waits for the platform to fall quiet."""
@@ -465,7 +467,7 @@ ID_KEYS = {
     "recording_id",
 }
 #: The version the scripted editor declares in its `clientInfo`.
-ORACLE_CLIENT_VERSION = blackbox.INITIALIZE["send"]["params"]["clientInfo"]["version"]
+ORACLE_CLIENT_VERSION = ACP_INITIALIZE["send"]["params"]["clientInfo"]["version"]
 #: Keys whose values are this build's own version.
 VERSION_KEYS = {"agent_version", "client_version", "version"}
 #: Keys whose values describe the machine the capture ran on.
@@ -586,6 +588,11 @@ def normalize_run(
     }
 
 
+def renormalize(scenario: dict[str, Any], captured: dict[str, Any]) -> list[dict[str, Any]]:
+    """:func:`normalize` as `--renormalize` calls it, on a raw capture."""
+    return normalize(captured, scenario["surface"])
+
+
 def normalize(captured: dict[str, Any], surface: str = "") -> list[dict[str, Any]]:
     normalizer = Normalizer()
     # The sessions an editor connection opened are numbered in the order the
@@ -604,14 +611,16 @@ def capture(scenario: dict[str, Any], commands: dict[str, list[str]], raw: bool)
     captured = run_scenario(scenario, commands)
     entry = {"name": scenario["name"], "surface": scenario["surface"], "observed": normalize(captured, scenario["surface"])}
     if raw:
-        entry["raw"] = captured["runs"]
+        # The whole capture, so `--renormalize` can normalize it again.
+        entry["raw"] = captured
+        entry["scenario"] = scenario
     return entry
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument("--vibe", type=Path, default=None, help="drive this port's `vibe`")
     parser.add_argument("--vibe-acp", type=Path, default=None, help="drive this port's `vibe-acp`")
     parser.add_argument("--surface", action="append", default=[], choices=SURFACES)
@@ -619,11 +628,15 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--raw", action="store_true")
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, renormalize, 'telemetry_session')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, vibe=arguments.vibe, vibe_acp=arguments.vibe_acp)
     try:
         port = any(

@@ -114,7 +114,7 @@ def probe_case(name: str, *, rounds: list[dict[str, Any]], responses: list[dict[
 def probe_cases() -> list[dict[str, Any]]:
     first, second = FAST_CANDIDATES
     served = chat_json("ok")
-    once = [{}]
+    once: list[dict[str, Any]] = [{}]
 
     def refusal(status: int) -> dict[str, Any]:
         return {"status": status, "json": {"message": f"status {status}"}}

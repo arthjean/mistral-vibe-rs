@@ -97,7 +97,7 @@ impl ScheduledPrompt {
             #[allow(clippy::cast_precision_loss)]
             (Some(interval), _) => Ok(now + interval as f64),
             (None, Some(cron)) => next_cron_fire(cron, now),
-            (None, None) => Err("Exactly one of interval_seconds or cron is required.".to_owned()),
+            (None, None) => Err("Set exactly one of interval_seconds and cron.".to_owned()),
         }
     }
 }
@@ -230,7 +230,7 @@ pub fn parse_interval(text: &str) -> Result<u64, LoopError> {
         .ok_or_else(invalid)?;
     if seconds < MIN_INTERVAL_SECONDS {
         return Err(LoopError(format!(
-            "Interval must be at least {MIN_INTERVAL_SECONDS}s."
+            "The interval cannot be shorter than {MIN_INTERVAL_SECONDS}s."
         )));
     }
     Ok(seconds)
@@ -370,7 +370,7 @@ impl ScheduledLoops {
         let mut state = lock(&self.state);
         if state.loops.len() >= MAX_LOOPS_PER_SESSION {
             return Err(LoopError(format!(
-                "Loop limit reached ({MAX_LOOPS_PER_SESSION} per session)."
+                "This session already runs the maximum of {MAX_LOOPS_PER_SESSION} loops."
             )));
         }
         let now = vibe_core::clock::now_seconds_f64();
@@ -684,7 +684,7 @@ fn matches(field: &Field, value: i8) -> bool {
 pub fn next_cron_fire(cron: &str, now: f64) -> Result<f64, String> {
     let fields: Vec<&str> = cron.split_whitespace().collect();
     if fields.len() != 5 {
-        return Err("Cron must be a standard 5-field expression.".to_owned());
+        return Err("A cron schedule needs exactly 5 fields.".to_owned());
     }
     let invalid = |reason: String| format!("Invalid cron expression `{cron}`: {reason}");
     let minute = parse_field(fields[0], 0, 59, &[], 0).map_err(invalid)?;

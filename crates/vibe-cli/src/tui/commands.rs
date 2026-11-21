@@ -234,26 +234,26 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Reload,
         "reload",
         &["/reload"],
-        "Reload configuration, agent instructions, and skills from disk",
+        "Read config, agent instructions and skills from disk once more",
     ),
     command(
         CommandId::Clear,
         "clear",
         &["/clear", "/new"],
-        "Start a new conversation. Optionally pass a prompt to seed it.",
+        "Open a fresh conversation, optionally seeded with your prompt.",
     ),
     command(
         CommandId::Copy,
         "copy",
         &["/copy"],
-        "Copy the last agent message to the clipboard",
+        "Put the agent's final reply on the clipboard",
     )
     .side_channel(),
     command(
         CommandId::PasteImage,
         "paste-image",
         &["/paste-image"],
-        "Paste an image from the OS clipboard into the prompt",
+        "Put the image the OS clipboard holds into the prompt",
     )
     .side_channel()
     .gated(CommandGate::ClipboardImage),
@@ -261,14 +261,14 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Log,
         "log",
         &["/log"],
-        "Show path to current interaction log file",
+        "Print where the interaction log is stored",
     )
     .side_channel(),
     command(
         CommandId::LogLevel,
         "log-level",
         &["/log-level"],
-        "Change the log level for this session or persist it to config.toml.",
+        "Set the log level for this session, or save it in your config.toml.",
     ),
     command(
         CommandId::Debug,
@@ -281,7 +281,7 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Compact,
         "compact",
         &["/compact"],
-        "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+        "Shrink the history into a summary; any instructions you pass along will then steer what it says",
     ),
     command(
         CommandId::Exit,
@@ -295,14 +295,14 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Status,
         "status",
         &["/status"],
-        "Display agent statistics and model and provider details",
+        "Show agent statistics plus the model and provider in use",
     )
     .side_channel(),
     command(
         CommandId::Whoami,
         "whoami",
         &["/whoami"],
-        "Display the Mistral signed-in user, workspace, and plan",
+        "Show the signed-in Mistral user, workspace and the plan",
     )
     .side_channel(),
     command(
@@ -315,13 +315,13 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::RemoteProject,
         "remote-project",
         &["/remote-project"],
-        "Select the Vibe Code Web project for this repository",
+        "Pick which Vibe Code Web project this repository uses",
     ),
     command(
         CommandId::ProxySetup,
         "proxy-setup",
         &["/proxy-setup"],
-        "Configure proxy and SSL certificate settings",
+        "Set up the proxy and SSL certificate options",
     ),
     command(
         CommandId::Resume,
@@ -340,20 +340,20 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Mcp,
         "mcp",
         &["/mcp", "/connectors"],
-        "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+        "Show the MCP servers and connectors, or a server's tools when given its name; subcommands: status, login <alias>, logout <alias>, add <url> [--transport http|streamable-http]",
     ),
     command(
         CommandId::Plugins,
         "plugins",
         &["/plugins"],
-        "Display the plugins this session is running",
+        "List each plugin that runs in this session",
     )
     .gated(CommandGate::ExperimentalHarness),
     command(
         CommandId::ReloadPlugins,
         "reload-plugins",
         &["/reload-plugins"],
-        "Re-pin this session's plugins and report what changed",
+        "Pin this session's plugins again and say what changed",
     )
     .gated(CommandGate::ExperimentalHarness),
     command(
@@ -385,13 +385,13 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Rewind,
         "rewind",
         &["/rewind"],
-        "Rewind to a previous message (or press Esc twice)",
+        "Go back to an earlier message (or hit Esc twice)",
     ),
     command(
         CommandId::Branch,
         "branch",
         &["/branch"],
-        "Fork the current conversation into a new resumable session, leaving this session unchanged. Resume the copy with `vibe --resume <id>`.",
+        "Copy this conversation into a new resumable session and keep the current one as it is now. Reopen the copy with `vibe --resume <id>`.",
     ),
     command(
         CommandId::Retry,

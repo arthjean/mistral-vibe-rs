@@ -27,7 +27,7 @@ fn loaded(user: &str) -> (tempfile::TempDir, ConfigSnapshot) {
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )
@@ -302,7 +302,7 @@ fn an_audio_entry_without_an_alias_is_refused_and_a_repeated_alias_is_one_entry(
     let error = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )

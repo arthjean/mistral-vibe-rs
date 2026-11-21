@@ -398,9 +398,9 @@ async fn the_prompt_lists_exactly_the_uncovered_requirements() {
     );
 }
 
-/// An approval for the session stores one rule per uncovered requirement, and a
-/// permanent one also writes the tool's configured allowlist so the next
-/// session starts already covered.
+/// A session-wide approval saves a rule for each requirement nothing covered,
+/// and a permanent approval additionally updates the tool's allowlist in the
+/// configuration, so later sessions begin with that coverage.
 #[tokio::test]
 async fn a_permanent_approval_writes_the_allowlist_a_session_one_does_not() {
     let written = Arc::new(StdRwLock::new(Vec::<(String, Vec<String>)>::new()));

@@ -150,7 +150,7 @@ async fn mcp_add<B: CommandBackend>(arguments: &str, backend: &mut B) {
     let tail = if parsed.login {
         "Starting OAuth login...".to_owned()
     } else {
-        format!("Run `/mcp login {name}` to authenticate, or `/mcp status` to inspect it.")
+        format!("Sign in with `/mcp login {name}`, or check it with `/mcp status`.")
     };
     backend.emit(Effect::Message(format!("{head}\n{tail}")));
     if parsed.login {

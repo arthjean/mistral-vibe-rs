@@ -1,349 +1,1436 @@
 {
   "corpus": "crates/vibe-app-server/tests/agents-parity/corpus.json",
   "measuredAgainst": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "agents parity:": {
       "delegation/ask-parent": {
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 2,
-        "/steps/*/turn/*/id": 4,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "6965b1122dba8f5e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "1604164ec9b7d224",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 2,
+          "fingerprint": "64db4e4cb3f29e22",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 4,
+          "fingerprint": "f5f02cab3c97e921",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "2e7e37a329a5a492",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "7a876bff1c4f214b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "476ad609348b7854",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "a5eba587150b4045",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "c4142f59df9c7e3c",
+          "level": "exact"
+        }
       },
       "delegation/child-approval": {
-        "/requests/*/conversation/*/content": 1,
-        "/requests/*/tools/*": 6,
-        "/steps/*/response/agent": 1,
-        "/steps/*/tree/*": 15,
-        "/steps/*/tree/*/agent": 1,
-        "/steps/*/tree/*/children": 1,
-        "/steps/*/tree/*/dir": 33,
-        "/steps/*/tree/*/file": 31,
-        "/steps/*/tree/*/meta": 1,
-        "/steps/*/tree/*/parent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 4,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/detail": 2,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/id": 6,
-        "/steps/*/turn/*/method": 4,
-        "/steps/*/turn/*/patch": 2,
-        "/steps/*/turn/*/role": 5,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 4,
-        "/steps/*/turn/*/state": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 5
+        "/requests/*/conversation/*/content": {
+          "count": 1,
+          "fingerprint": "0069e2e6243d1f61",
+          "level": "exact"
+        },
+        "/requests/*/tools/*": {
+          "count": 6,
+          "fingerprint": "afc01ab35afc224e",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/tree/*": {
+          "count": 15,
+          "fingerprint": "38c1783e53a94d6a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/agent": {
+          "count": 1,
+          "fingerprint": "44be6b0df915c363",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/children": {
+          "count": 1,
+          "fingerprint": "e774434e8ff9a45a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/dir": {
+          "count": 33,
+          "fingerprint": "f31d2c8fc56bcce1",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/file": {
+          "count": 31,
+          "fingerprint": "9bcf0e89064f20b4",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/meta": {
+          "count": 1,
+          "fingerprint": "a72e324c389c0222",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/parent": {
+          "count": 1,
+          "fingerprint": "034e1d6714a22938",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "5f31556f6ea9dc98",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 4,
+          "fingerprint": "493db54b8af9a2d8",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "2c52f38d7933a2ac",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/detail": {
+          "count": 2,
+          "fingerprint": "817e05c34f96d46b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "e3decebe76861be1",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 6,
+          "fingerprint": "acfe8c91de94d9af",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 4,
+          "fingerprint": "4a52ff0aff8d51dc",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 2,
+          "fingerprint": "58dfd1977abe4679",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 5,
+          "fingerprint": "3cd1fd98dbc3970d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 4,
+          "fingerprint": "4ae0fa8cb86a897e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/state": {
+          "count": 2,
+          "fingerprint": "34bccc892aed3995",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "c71e672a3b4de17e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 5,
+          "fingerprint": "980c4b03ba0efb61",
+          "level": "exact"
+        }
       },
       "delegation/child-denied": {
-        "/requests/*/conversation/*/content": 1,
-        "/requests/*/tools/*": 6,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 4,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/detail": 2,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/id": 6,
-        "/steps/*/turn/*/method": 4,
-        "/steps/*/turn/*/patch": 2,
-        "/steps/*/turn/*/role": 5,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 4,
-        "/steps/*/turn/*/state": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 5
+        "/requests/*/conversation/*/content": {
+          "count": 1,
+          "fingerprint": "0069e2e6243d1f61",
+          "level": "exact"
+        },
+        "/requests/*/tools/*": {
+          "count": 6,
+          "fingerprint": "afc01ab35afc224e",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "5f31556f6ea9dc98",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 4,
+          "fingerprint": "493db54b8af9a2d8",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "2c52f38d7933a2ac",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/detail": {
+          "count": 2,
+          "fingerprint": "817e05c34f96d46b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "e3decebe76861be1",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 6,
+          "fingerprint": "acfe8c91de94d9af",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 4,
+          "fingerprint": "4a52ff0aff8d51dc",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 2,
+          "fingerprint": "58dfd1977abe4679",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 5,
+          "fingerprint": "3cd1fd98dbc3970d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 4,
+          "fingerprint": "4ae0fa8cb86a897e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/state": {
+          "count": 2,
+          "fingerprint": "34bccc892aed3995",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "c71e672a3b4de17e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 5,
+          "fingerprint": "980c4b03ba0efb61",
+          "level": "exact"
+        }
       },
       "delegation/child-error": {
-        "/steps/*/response/agent": 1,
-        "/steps/*/tree/*": 15,
-        "/steps/*/tree/*/agent": 1,
-        "/steps/*/tree/*/children": 1,
-        "/steps/*/tree/*/dir": 33,
-        "/steps/*/tree/*/file": 31,
-        "/steps/*/tree/*/meta": 1,
-        "/steps/*/tree/*/parent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/tree/*": {
+          "count": 15,
+          "fingerprint": "38c1783e53a94d6a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/agent": {
+          "count": 1,
+          "fingerprint": "44be6b0df915c363",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/children": {
+          "count": 1,
+          "fingerprint": "e774434e8ff9a45a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/dir": {
+          "count": 33,
+          "fingerprint": "8a3116dc33825a9e",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/file": {
+          "count": 31,
+          "fingerprint": "4202140281c46d5c",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/meta": {
+          "count": 1,
+          "fingerprint": "a72e324c389c0222",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/parent": {
+          "count": 1,
+          "fingerprint": "034e1d6714a22938",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "6537282ab5215ed3",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "6e91d6d4c29a8335",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "64e643f1e3138770",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "delegation/depth": {
-        "/requests/*/tools/*": 6,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 6,
+          "fingerprint": "afc01ab35afc224e",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "55944e1c24d66b9e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "b610fbcb17012079",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "delegation/disabled-subagent": {
-        "/requests/*/tools/*": 4,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 4,
+          "fingerprint": "4790ae3c1ac148d7",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "cbf05200b51b2cdb",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "0d37cced6cd63c2c",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "delegation/explore": {
-        "/requests/*/tools/*": 6,
-        "/steps/*/response/agent": 1,
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/tree/*": 15,
-        "/steps/*/tree/*/agent": 1,
-        "/steps/*/tree/*/children": 1,
-        "/steps/*/tree/*/dir": 33,
-        "/steps/*/tree/*/file": 31,
-        "/steps/*/tree/*/meta": 1,
-        "/steps/*/tree/*/parent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 2,
-        "/steps/*/turn/*/id": 4,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 6,
+          "fingerprint": "afc01ab35afc224e",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "a2bc1521ef34374d",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "82a49f1efeb4e508",
+          "level": "exact"
+        },
+        "/steps/*/tree/*": {
+          "count": 15,
+          "fingerprint": "38c1783e53a94d6a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/agent": {
+          "count": 1,
+          "fingerprint": "44be6b0df915c363",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/children": {
+          "count": 1,
+          "fingerprint": "e774434e8ff9a45a",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/dir": {
+          "count": 33,
+          "fingerprint": "8a3116dc33825a9e",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/file": {
+          "count": 31,
+          "fingerprint": "4202140281c46d5c",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/meta": {
+          "count": 1,
+          "fingerprint": "a72e324c389c0222",
+          "level": "exact"
+        },
+        "/steps/*/tree/*/parent": {
+          "count": 1,
+          "fingerprint": "034e1d6714a22938",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "6965b1122dba8f5e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "1604164ec9b7d224",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 2,
+          "fingerprint": "64db4e4cb3f29e22",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 4,
+          "fingerprint": "f5f02cab3c97e921",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "2e7e37a329a5a492",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "7a876bff1c4f214b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "476ad609348b7854",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "a5eba587150b4045",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "c4142f59df9c7e3c",
+          "level": "exact"
+        }
       },
       "delegation/primary-agent": {
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "cbf05200b51b2cdb",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "fa681de418c1cbc6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "delegation/unknown-agent": {
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "cbf05200b51b2cdb",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "086bedf478a77eb4",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "profile/builtin-tools": {
-        "/requests/*/tools/*": 6,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 6,
+          "fingerprint": "afc01ab35afc224e",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "e13c938a7ab59173",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "7dce04e2ea951653",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "profile/custom-model": {
-        "/requests/*/tools/*": 2,
-        "/steps/*/response/agent": 1,
-        "/steps/*/response/result/runtime/activeModel/autoCompactThreshold": 1,
-        "/steps/*/response/result/runtime/activeModel/source": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 2,
+          "fingerprint": "d8c47ee521833988",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "4f8a2755f463a7e8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeModel/source": {
+          "count": 1,
+          "fingerprint": "82a24c0123787fe1",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "e13c938a7ab59173",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "7dce04e2ea951653",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "profile/custom-tools": {
-        "/requests/*/tools/*": 2,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 2,
+          "fingerprint": "c6062819ef8f64ef",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "55e4b6140a7c438f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "e13c938a7ab59173",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "7dce04e2ea951653",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "4aa8f2fd4cecf25b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "f988ee70846de087",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "878a251422b583f5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "b4c8d87428a1c368",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "56ab173927906531",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "fb8e4e2e6b37dce2",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "d848017baf5e2bb1",
+          "level": "exact"
+        }
       },
       "profile/switch-model": {
-        "/steps/*/turn/*": 2,
-        "/steps/*/turn/*/content": 4,
-        "/steps/*/turn/*/content/*/text": 2,
-        "/steps/*/turn/*/id": 6,
-        "/steps/*/turn/*/method": 4,
-        "/steps/*/turn/*/role": 6,
-        "/steps/*/turn/*/runtime": 2,
-        "/steps/*/turn/*/sessionId": 4,
-        "/steps/*/turn/*/status": 2,
-        "/steps/*/turn/*/type": 4
+        "/steps/*/turn/*": {
+          "count": 2,
+          "fingerprint": "a0927a3c37bbf1c9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 4,
+          "fingerprint": "725d6c63e6a84bee",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 2,
+          "fingerprint": "5b242838985dbbb6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 6,
+          "fingerprint": "dfc570a460a92ceb",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 4,
+          "fingerprint": "94cf0a819b23c3d4",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 6,
+          "fingerprint": "1f3770212cc6209b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 2,
+          "fingerprint": "ea05ebdd65a7a089",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 4,
+          "fingerprint": "32e59ee22a937f29",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 2,
+          "fingerprint": "c780233ecd7d0407",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 4,
+          "fingerprint": "d58f2d54472fd9e2",
+          "level": "exact"
+        }
       },
       "registry/builtins": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "586a9ebf827da27b",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "e21827c0b8a6603e",
+          "level": "exact"
+        }
       },
       "registry/custom-files": {
-        "/requests/*/tools/*": 2,
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/runtime/agents/*": 1,
-        "/steps/*/response/result/runtime/agents/*/agentType": 2,
-        "/steps/*/response/result/runtime/agents/*/description": 2,
-        "/steps/*/response/result/runtime/agents/*/displayName": 3,
-        "/steps/*/response/result/runtime/agents/*/name": 3,
-        "/steps/*/response/result/runtime/agents/*/safety": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 2,
+          "fingerprint": "d8c47ee521833988",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "987ec661db0ac91c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*": {
+          "count": 1,
+          "fingerprint": "628a32255cfa2a4d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/agentType": {
+          "count": 2,
+          "fingerprint": "6c72befd93cd691c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/description": {
+          "count": 2,
+          "fingerprint": "42083f0a396315c5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/displayName": {
+          "count": 3,
+          "fingerprint": "af1ba74ceef363f5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/name": {
+          "count": 3,
+          "fingerprint": "a67e0bba976ba608",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/safety": {
+          "count": 1,
+          "fingerprint": "afbe502c668f1161",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "ca1a6ea575cb2034",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "55f1e0d6c1b9e389",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "e3c38f7daf6ab6d6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "957c97f12bbef61d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "8f9f7d8cdab2ece3",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "b12f5ddbd84356e5",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "2bc5d126b8687fb6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "cfacc531159e9fd0",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "5369c0fc31566763",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "f314ed891dcd546a",
+          "level": "exact"
+        }
       },
       "registry/custom-lean": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "10692e81d4e5eccf",
+          "level": "exact"
+        }
       },
       "registry/lean-installed": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "7787ae072d52b709",
+          "level": "exact"
+        }
       },
       "registry/legacy-only": {
-        "/requests/*/tools/*": 2,
-        "/steps/*/response/agent": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/content": 2,
-        "/steps/*/turn/*/content/*/text": 1,
-        "/steps/*/turn/*/id": 3,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/role": 3,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 2,
-        "/steps/*/turn/*/status": 1,
-        "/steps/*/turn/*/type": 2
+        "/requests/*/tools/*": {
+          "count": 2,
+          "fingerprint": "d8c47ee521833988",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "b1447480e0243efc",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content": {
+          "count": 2,
+          "fingerprint": "03fcb7fbfe0c35a8",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/content/*/text": {
+          "count": 1,
+          "fingerprint": "2e2743660cfad990",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/id": {
+          "count": 3,
+          "fingerprint": "7ba310730c379d50",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "e45d59d4ed1ed6de",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/role": {
+          "count": 3,
+          "fingerprint": "5ffc46dbbcb5654e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "a3d25b0ecce416cd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 2,
+          "fingerprint": "0038d318ed4779f0",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "b153fe7376a1fb50",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/type": {
+          "count": 2,
+          "fingerprint": "0b64425f23cca21a",
+          "level": "exact"
+        }
       },
       "registry/precedence": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "97b7d1ce902722bb",
+          "level": "exact"
+        }
       },
       "registry/untrusted-project": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "34eab999f3dc6df0",
+          "level": "exact"
+        }
       },
       "selection/default-agent": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "f5619ae7ee22166f",
+          "level": "exact"
+        }
       },
       "selection/disabled": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/error/code": 2,
-        "/steps/*/response/error/names/*": 2,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "836de77a18b3c23a",
+          "level": "exact"
+        },
+        "/steps/*/response/error/names/*": {
+          "count": 2,
+          "fingerprint": "83c21eb23adfb33a",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "25d6b4a10386ec48",
+          "level": "exact"
+        }
       },
       "selection/enabled": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/error/code": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "dac662737520b7bc",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "aeb3ef5f31861eb4",
+          "level": "exact"
+        }
       },
       "selection/enabled-default-excluded": {
-        "/steps/*/response/error/code": 1
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        }
       },
       "selection/install": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/active/description": 1,
-        "/steps/*/response/result/active/displayName": 1,
-        "/steps/*/response/result/active/name": 1,
-        "/steps/*/response/result/active/safety": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "ea4de12907e3a45b",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "58462506c5ddec35",
+          "level": "exact"
+        },
+        "/steps/*/response/result/active/description": {
+          "count": 1,
+          "fingerprint": "b1883a2029e01fdc",
+          "level": "exact"
+        },
+        "/steps/*/response/result/active/displayName": {
+          "count": 1,
+          "fingerprint": "2303da9570a0616d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/active/name": {
+          "count": 1,
+          "fingerprint": "7fd146197a2e2531",
+          "level": "exact"
+        },
+        "/steps/*/response/result/active/safety": {
+          "count": 1,
+          "fingerprint": "ef6ed3866eb9641a",
+          "level": "exact"
+        }
       },
       "selection/renamed-default": {
-        "/steps/*/response/error/code": 1
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        }
       },
       "selection/smart-approve-available": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "ec5a995ef7c19ee6",
+          "level": "exact"
+        }
       },
       "selection/smart-approve-default": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/runtime/activeAgent/description": 1,
-        "/steps/*/response/result/runtime/activeAgent/displayName": 1,
-        "/steps/*/response/result/runtime/activeAgent/name": 1,
-        "/steps/*/response/result/runtime/activeAgent/safety": 1,
-        "/steps/*/response/result/runtime/agents/*": 1,
-        "/steps/*/response/result/runtime/agents/*/agentType": 1,
-        "/steps/*/response/result/runtime/agents/*/description": 2,
-        "/steps/*/response/result/runtime/agents/*/displayName": 2,
-        "/steps/*/response/result/runtime/agents/*/name": 2,
-        "/steps/*/response/result/runtime/agents/*/safety": 2
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "cccf26c187a4a52c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/description": {
+          "count": 1,
+          "fingerprint": "32c3675e6cc705e2",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/displayName": {
+          "count": 1,
+          "fingerprint": "9459a6abd860a09a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/name": {
+          "count": 1,
+          "fingerprint": "8ed6be112f23d509",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/safety": {
+          "count": 1,
+          "fingerprint": "f4c9df2c5666edb4",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*": {
+          "count": 1,
+          "fingerprint": "606b0faecada8f61",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/agentType": {
+          "count": 1,
+          "fingerprint": "5812ec193632807d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/description": {
+          "count": 2,
+          "fingerprint": "617587c7e4dabd19",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/displayName": {
+          "count": 2,
+          "fingerprint": "245e9ee1c511f04c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/name": {
+          "count": 2,
+          "fingerprint": "f044bcf6a483a282",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/agents/*/safety": {
+          "count": 2,
+          "fingerprint": "f5573a5c0f2788d9",
+          "level": "exact"
+        }
       },
       "selection/smart-approve-forced": {
-        "/requests/*": 1,
-        "/steps/*/response/agent": 1,
-        "/steps/*/response/error": 3,
-        "/steps/*/response/result": 3,
-        "/steps/*/response/result/runtime/activeAgent/description": 1,
-        "/steps/*/response/result/runtime/activeAgent/displayName": 1,
-        "/steps/*/response/result/runtime/activeAgent/name": 1,
-        "/steps/*/response/result/runtime/activeAgent/safety": 1
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/response/agent": {
+          "count": 1,
+          "fingerprint": "43e7be8d37eee889",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 3,
+          "fingerprint": "5e332c2606a4102d",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 3,
+          "fingerprint": "2a2541000365a2d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/displayName": {
+          "count": 1,
+          "fingerprint": "b43e3f4ae8cd3418",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/name": {
+          "count": 1,
+          "fingerprint": "225d4f4922c563ce",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/activeAgent/safety": {
+          "count": 1,
+          "fingerprint": "c75acd18ff3366ca",
+          "level": "exact"
+        }
       },
       "selection/smart-approve-hidden": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/error/code": 3,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "19166284f1072108",
+          "level": "exact"
+        },
+        "/steps/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "e3f9d08ebd3ec44a",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "1ab44b37f08899c9",
+          "level": "exact"
+        }
       },
       "selection/start-disabled": {
-        "/steps/*/response/error/code": 1,
-        "/steps/*/response/error/names/*": 2
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        },
+        "/steps/*/response/error/names/*": {
+          "count": 2,
+          "fingerprint": "a31ebe19da01a2a0",
+          "level": "exact"
+        }
       },
       "selection/start-lean-uninstalled": {
-        "/steps/*/response/error/code": 1
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        }
       },
       "selection/start-subagent": {
-        "/steps/*/response/error/code": 1
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        }
       },
       "selection/start-unknown": {
-        "/steps/*/response/error/code": 1
+        "/steps/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "f60493565556fe9a",
+          "level": "exact"
+        }
       }
     }
   }

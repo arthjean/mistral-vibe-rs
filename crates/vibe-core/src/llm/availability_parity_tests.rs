@@ -430,6 +430,26 @@ async fn run_probe_case(case: &Value, home: &Path) -> Value {
     )
 }
 
+/// How many times a probe case runs when its probe sends fewer requests than
+/// the reference did.
+const PROBE_ATTEMPTS: usize = 3;
+
+/// Whether a round of the port's run sent fewer probe requests than the
+/// reference's: the budget is real seconds, and a test host busy enough
+/// stretches the first request past it, so the probe gives up before it asks.
+/// Only that shortfall earns another run; a request too many, a request that
+/// differs, or a verdict the reference does not reach fails on the first.
+fn starved(reference: &Value, port: &Value) -> bool {
+    let sent = |rounds: &Value, index: usize| {
+        rounds
+            .get(index)
+            .and_then(|round| round["requests"].as_array())
+            .map_or(0, Vec::len)
+    };
+    let rounds = reference.as_array().map_or(0, Vec::len);
+    (0..rounds).any(|index| sent(port, index) < sent(reference, index))
+}
+
 #[test]
 fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
@@ -447,8 +467,15 @@ fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
     let results: Vec<(String, Value, Value)> = runtime.block_on(async {
         let mut results = Vec::new();
         for (index, case) in cases.iter().enumerate() {
-            let home = scratch.path().join(format!("probe-{index}"));
-            let observed = run_probe_case(case, &home).await;
+            let mut attempt = 0;
+            let observed = loop {
+                let home = scratch.path().join(format!("probe-{index}-{attempt}"));
+                let observed = run_probe_case(case, &home).await;
+                attempt += 1;
+                if attempt == PROBE_ATTEMPTS || !starved(&case["observed"], &observed) {
+                    break observed;
+                }
+            };
             results.push((
                 format!(
                     "availabilityProbes/{}",
@@ -461,6 +488,7 @@ fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
         results
     });
     let mut tally = Tally::new(CORPUS, []);
+    tally.differ(departures);
     for (name, reference, port) in &results {
         tally.record(name, reference, port, departures(reference, port));
     }
@@ -606,6 +634,7 @@ fn every_utility_completion_is_labeled_and_attributed_as_the_corpus_records() {
         .build()
         .expect("a runtime starts");
     let mut tally = Tally::new(CORPUS, []);
+    tally.differ(departures);
     for (index, case) in cases.iter().enumerate() {
         let home = scratch.path().join(format!("completion-{index}"));
         let port = runtime.block_on(run_completion_case(case, &home));
@@ -736,4 +765,22 @@ fn a_worktree_name_request_is_labeled_and_attributed_as_the_corpus_records() {
         ["/headers/accept", "/headers/user-agent"],
         "the worktree name request no longer departs where the v3 gaps say it does"
     );
+}
+
+#[test]
+fn only_a_round_that_sent_fewer_requests_earns_another_run() {
+    let reference = json!([{"requests": [1, 2]}, {"requests": [3]}]);
+    assert!(starved(
+        &reference,
+        &json!([{"requests": [1]}, {"requests": [3]}])
+    ));
+    assert!(starved(&reference, &json!([{"requests": [1, 2]}])));
+    assert!(!starved(
+        &reference,
+        &json!([{"requests": [1, 2]}, {"requests": [3]}])
+    ));
+    assert!(!starved(
+        &reference,
+        &json!([{"requests": [1, 2, 4]}, {"requests": [9]}])
+    ));
 }

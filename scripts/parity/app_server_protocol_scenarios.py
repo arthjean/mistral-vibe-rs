@@ -14,7 +14,7 @@ from typing import Any
 
 
 INIT = {"init": True}
-START = {"start": {}}
+START: dict[str, Any] = {"start": {}}
 
 
 def send(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:

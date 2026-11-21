@@ -133,14 +133,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -162,7 +162,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -181,14 +181,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -210,77 +210,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
-                  "workspaceRoots": [],
-                  "worktree": null
-                }
-              ],
-              "nextCursor": null,
-              "previousCursor": null
-            }
-          }
-        },
-        {
-          "method": "session/list",
-          "notifications": [],
-          "response": {
-            "result": {
-              "items": [],
-              "nextCursor": null,
-              "previousCursor": null
-            }
-          }
-        },
-        {
-          "method": "session/list",
-          "notifications": [],
-          "response": {
-            "result": {
-              "items": [],
-              "nextCursor": null,
-              "previousCursor": null
-            }
-          }
-        },
-        {
-          "method": "session/list",
-          "notifications": [],
-          "response": {
-            "result": {
-              "items": [
-                {
-                  "agent": null,
-                  "archivedAt": null,
-                  "bumpedAt": "<time>",
-                  "contextUsage": {
-                    "cachedInputTokens": 0,
-                    "inputTokens": 10,
-                    "outputTokens": 5,
-                    "totalTokens": 15
-                  },
-                  "createdAt": "<time>",
-                  "cwd": "<ws>",
-                  "harness": "unified",
-                  "id": "<id-1>",
-                  "isUnseen": true,
-                  "loops": [],
-                  "model": null,
-                  "parentSessionId": null,
-                  "pinnedAt": null,
-                  "preview": "First question",
-                  "reasoningEffort": null,
-                  "rootSessionId": "<id-1>",
-                  "status": {
-                    "type": "idle"
-                  },
-                  "title": null,
-                  "tokenUsage": {
-                    "cachedInputTokens": 0,
-                    "inputTokens": 10,
-                    "outputTokens": 5,
-                    "totalTokens": 15
-                  },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -306,18 +236,29 @@
           "notifications": [],
           "response": {
             "result": {
+              "items": [],
+              "nextCursor": null,
+              "previousCursor": null
+            }
+          }
+        },
+        {
+          "method": "session/list",
+          "notifications": [],
+          "response": {
+            "result": {
               "items": [
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -339,7 +280,66 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
+                  "workspaceRoots": [],
+                  "worktree": null
+                }
+              ],
+              "nextCursor": null,
+              "previousCursor": null
+            }
+          }
+        },
+        {
+          "method": "session/list",
+          "notifications": [],
+          "response": {
+            "result": {
+              "items": [],
+              "nextCursor": null,
+              "previousCursor": null
+            }
+          }
+        },
+        {
+          "method": "session/list",
+          "notifications": [],
+          "response": {
+            "result": {
+              "items": [
+                {
+                  "agent": null,
+                  "archivedAt": null,
+                  "bumpedAt": "<time:int>",
+                  "contextUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 10,
+                    "outputTokens": 5,
+                    "totalTokens": 15
+                  },
+                  "createdAt": "<time:int>",
+                  "cwd": "<ws>",
+                  "harness": "unified",
+                  "id": "<id-1>",
+                  "isUnseen": true,
+                  "loops": [],
+                  "model": null,
+                  "parentSessionId": null,
+                  "pinnedAt": null,
+                  "preview": "First question",
+                  "reasoningEffort": null,
+                  "rootSessionId": "<id-1>",
+                  "status": {
+                    "type": "idle"
+                  },
+                  "title": null,
+                  "tokenUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 10,
+                    "outputTokens": 5,
+                    "totalTokens": 15
+                  },
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -579,14 +579,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -608,7 +608,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -627,14 +627,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -656,7 +656,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -675,14 +675,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -704,7 +704,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -723,14 +723,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -752,21 +752,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -788,7 +788,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -807,14 +807,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -836,21 +836,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -872,21 +872,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -908,7 +908,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -927,14 +927,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -956,21 +956,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -992,21 +992,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -1028,7 +1028,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -1628,7 +1628,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -1639,7 +1639,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -1652,7 +1652,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": null,
@@ -1665,7 +1665,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -1687,9 +1687,9 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -1706,7 +1706,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -1729,14 +1729,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -1758,21 +1758,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -1794,7 +1794,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -1813,14 +1813,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -1842,7 +1842,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -1861,14 +1861,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -1890,21 +1890,21 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -1926,7 +1926,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -2256,7 +2256,7 @@
           ],
           "response": {
             "result": {
-              "pinnedAt": "<time>"
+              "pinnedAt": "<time:int>"
             }
           }
         },
@@ -2341,7 +2341,7 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "title": "Before any turn",
               "updatedAt": null
             }
@@ -2354,7 +2354,7 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 2,
               "title": {
                 "prose": 13,
                 "sha256": "1ee73bc93030ef88149aad7f7fe69e30789468d946770744fbbc259276534466"
@@ -2414,14 +2414,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -2446,7 +2446,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -2679,7 +2679,7 @@
           "notifications": [],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "title": "Saved title",
               "updatedAt": null
             }
@@ -2736,14 +2736,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -2765,7 +2765,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -3039,7 +3039,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-2>",
                   "inputEntryId": null,
@@ -3050,7 +3050,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3063,7 +3063,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": "<id-2>",
@@ -3076,7 +3076,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3086,7 +3086,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
                   "inputEntryId": null,
@@ -3097,7 +3097,7 @@
                   "source": "turn_start",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3110,7 +3110,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-7>",
                   "inputEntryId": "<id-5>",
@@ -3123,7 +3123,7 @@
                   "source": "harness",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3133,7 +3133,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-8>",
                   "inputEntryId": null,
@@ -3144,7 +3144,7 @@
                   "source": "turn_start",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3157,7 +3157,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-10>",
                   "inputEntryId": "<id-8>",
@@ -3170,7 +3170,7 @@
                   "source": "harness",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3192,7 +3192,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-8>",
                   "inputEntryId": null,
@@ -3203,7 +3203,7 @@
                   "source": "turn_start",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3216,7 +3216,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-10>",
                   "inputEntryId": "<id-8>",
@@ -3229,7 +3229,7 @@
                   "source": "harness",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3251,7 +3251,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
                   "inputEntryId": null,
@@ -3262,7 +3262,7 @@
                   "source": "turn_start",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3275,7 +3275,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-7>",
                   "inputEntryId": "<id-5>",
@@ -3288,7 +3288,7 @@
                   "source": "harness",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3310,7 +3310,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-8>",
                   "inputEntryId": null,
@@ -3321,7 +3321,7 @@
                   "source": "turn_start",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3334,7 +3334,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-10>",
                   "inputEntryId": "<id-8>",
@@ -3347,7 +3347,7 @@
                   "source": "harness",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3369,7 +3369,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-8>",
                   "inputEntryId": null,
@@ -3380,7 +3380,7 @@
                   "source": "turn_start",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3393,7 +3393,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-10>",
                   "inputEntryId": "<id-8>",
@@ -3406,7 +3406,7 @@
                   "source": "harness",
                   "turnId": "<id-9>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3428,7 +3428,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
                   "inputEntryId": null,
@@ -3439,7 +3439,7 @@
                   "source": "turn_start",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -3452,7 +3452,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-7>",
                   "inputEntryId": "<id-5>",
@@ -3465,7 +3465,7 @@
                   "source": "harness",
                   "turnId": "<id-6>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -3523,35 +3523,35 @@
             "result": {
               "items": [
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-3>",
                   "inputEntryId": "<id-2>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 },
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-6>",
                   "inputEntryId": "<id-5>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 },
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-9>",
                   "inputEntryId": "<id-8>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 }
@@ -3568,13 +3568,13 @@
             "result": {
               "items": [
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-9>",
                   "inputEntryId": "<id-8>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 }
@@ -3591,13 +3591,13 @@
             "result": {
               "items": [
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-3>",
                   "inputEntryId": "<id-2>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 }
@@ -3614,24 +3614,24 @@
             "result": {
               "items": [
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-3>",
                   "inputEntryId": "<id-2>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 },
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-6>",
                   "inputEntryId": "<id-5>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 }
@@ -3648,24 +3648,24 @@
             "result": {
               "items": [
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-6>",
                   "inputEntryId": "<id-5>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 },
                 {
-                  "completedAt": "<time>",
+                  "completedAt": "<time:int>",
                   "error": null,
                   "id": "<id-9>",
                   "inputEntryId": "<id-8>",
                   "queueItemId": null,
                   "sessionId": "<id-1>",
-                  "startedAt": "<time>",
+                  "startedAt": "<time:int>",
                   "status": "completed",
                   "stopReason": null
                 }
@@ -4005,12 +4005,12 @@
           "notifications": [],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -4020,7 +4020,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -4031,7 +4031,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4044,7 +4044,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -4057,7 +4057,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4067,7 +4067,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": null,
@@ -4078,7 +4078,7 @@
                     "source": "turn_start",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4091,7 +4091,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": "<id-5>",
@@ -4104,7 +4104,7 @@
                     "source": "harness",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -4126,14 +4126,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -4155,7 +4155,7 @@
                     "outputTokens": 10,
                     "totalTokens": 30
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -4166,13 +4166,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-6>",
                     "inputEntryId": "<id-5>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -4294,9 +4294,9 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "legacy",
                   "id": "<id-2>",
@@ -4313,7 +4313,7 @@
                   },
                   "title": "Seeded session",
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -4336,7 +4336,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-3>",
                   "inputEntryId": null,
@@ -4347,7 +4347,7 @@
                   "source": "harness",
                   "turnId": null,
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -4357,7 +4357,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": null,
@@ -4368,7 +4368,7 @@
                   "source": "harness",
                   "turnId": null,
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -4378,7 +4378,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
                   "inputEntryId": null,
@@ -4389,7 +4389,7 @@
                   "source": "harness",
                   "turnId": null,
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 {
@@ -4399,7 +4399,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-6>",
                   "inputEntryId": null,
@@ -4410,7 +4410,7 @@
                   "source": "harness",
                   "turnId": null,
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ]
@@ -4430,7 +4430,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-6>",
                   "inputEntryId": null,
@@ -4441,7 +4441,7 @@
                   "source": "harness",
                   "turnId": null,
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 }
               ],
@@ -4473,7 +4473,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": null,
@@ -4484,7 +4484,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4494,7 +4494,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-8>",
                     "inputEntryId": null,
@@ -4507,7 +4507,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4517,7 +4517,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-9>",
                     "inputEntryId": null,
@@ -4528,7 +4528,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -4538,7 +4538,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-10>",
                     "inputEntryId": null,
@@ -4551,7 +4551,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -4561,9 +4561,9 @@
                 "session": {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -4580,7 +4580,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -4603,14 +4603,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -4632,16 +4632,16 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "legacy",
                   "id": "<id-2>",
@@ -4658,7 +4658,7 @@
                   },
                   "title": "Seeded session",
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -4986,12 +4986,12 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -5001,7 +5001,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -5012,7 +5012,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -5025,7 +5025,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -5038,7 +5038,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -5060,14 +5060,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -5089,7 +5089,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -5100,13 +5100,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -5124,14 +5124,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -5153,7 +5153,7 @@
                     "outputTokens": 10,
                     "totalTokens": 30
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -5486,12 +5486,12 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -5501,7 +5501,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -5512,7 +5512,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -5525,7 +5525,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -5538,7 +5538,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -5560,14 +5560,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -5589,7 +5589,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -5600,13 +5600,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -5899,7 +5899,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": null,
@@ -5910,7 +5910,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -5923,7 +5923,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": null,
@@ -5936,7 +5936,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -5946,7 +5946,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
                     "inputEntryId": null,
@@ -5957,7 +5957,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -5970,7 +5970,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": null,
@@ -5983,7 +5983,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -6005,9 +6005,9 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -6024,7 +6024,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -6099,7 +6099,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": null,
@@ -6110,7 +6110,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -6123,7 +6123,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": null,
@@ -6136,7 +6136,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -6146,7 +6146,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
                     "inputEntryId": null,
@@ -6157,7 +6157,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -6170,7 +6170,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": null,
@@ -6183,7 +6183,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -6205,9 +6205,9 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -6224,7 +6224,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -6247,9 +6247,9 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-3>",
@@ -6266,16 +6266,16 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -6292,21 +6292,21 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -6328,7 +6328,7 @@
                     "outputTokens": 10,
                     "totalTokens": 30
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -6735,14 +6735,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -6764,7 +6764,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -6926,12 +6926,12 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -6941,7 +6941,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -6952,7 +6952,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -6965,7 +6965,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -6978,7 +6978,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -7000,14 +7000,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -7029,7 +7029,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -7040,13 +7040,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -7424,7 +7424,7 @@
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -7434,7 +7434,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -7445,7 +7445,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -7458,7 +7458,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -7471,11 +7471,11 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "cwd": "<root>/checkout",
                       "previousCwd": "<ws>"
@@ -7492,7 +7492,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   }
                 ],
                 "historyBeforeCursor": null,
@@ -7501,14 +7501,14 @@
                 "session": {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<root>/checkout",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -7530,7 +7530,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -7541,13 +7541,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -7565,14 +7565,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<root>/checkout",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -7594,7 +7594,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -7613,14 +7613,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<root>/checkout",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -7642,7 +7642,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -7792,7 +7792,7 @@
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 2,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -7802,7 +7802,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -7813,7 +7813,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -7826,7 +7826,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -7839,11 +7839,11 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "cwd": "<root>/checkout",
                       "previousCwd": "<ws>"
@@ -7860,10 +7860,10 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "cwd": "<ws>",
                       "previousCwd": "<root>/checkout"
@@ -7880,7 +7880,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   }
                 ],
                 "historyBeforeCursor": null,
@@ -7889,14 +7889,14 @@
                 "session": {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -7918,7 +7918,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -7929,13 +7929,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -8431,7 +8431,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -8442,7 +8442,7 @@
                     "source": "turn_start",
                     "turnId": "<id-4>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -8455,7 +8455,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": "<id-3>",
@@ -8468,11 +8468,11 @@
                     "source": "harness",
                     "turnId": "<id-4>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": null,
                     "generationStatus": "completed",
                     "id": "<id-6>",
@@ -8486,7 +8486,7 @@
                     "sessionId": "<id-2>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   }
                 ],
                 "historyBeforeCursor": null,
@@ -8495,9 +8495,9 @@
                 "session": {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -8514,7 +8514,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -8537,14 +8537,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -8566,7 +8566,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -8763,14 +8763,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -8792,7 +8792,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -8875,14 +8875,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -8904,7 +8904,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }
@@ -9066,12 +9066,12 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 1,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -9081,7 +9081,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -9092,7 +9092,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -9105,7 +9105,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -9118,7 +9118,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -9140,14 +9140,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -9169,7 +9169,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -9180,13 +9180,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -9202,12 +9202,12 @@
           ],
           "response": {
             "result": {
-              "lastEventId": "<nonzero>",
+              "lastEventId": 2,
               "state": {
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 2,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -9217,7 +9217,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -9228,7 +9228,7 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -9241,7 +9241,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": "<id-2>",
@@ -9254,7 +9254,7 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   }
                 ],
@@ -9276,14 +9276,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -9305,7 +9305,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -9316,13 +9316,13 @@
                 },
                 "turns": [
                   {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-3>",
                     "inputEntryId": "<id-2>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -9384,14 +9384,14 @@
                 {
                   "agent": null,
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -9413,7 +9413,7 @@
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 }

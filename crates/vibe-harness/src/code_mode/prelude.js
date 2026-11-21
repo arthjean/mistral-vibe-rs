@@ -19,16 +19,16 @@
   let suspending = false;
   let suspended = false;
 
-  const show = (value) => {
-    if (typeof value === "string") return value;
+  const asText = (value) => {
+    let text;
     try {
-      const text = JSON.stringify(value);
-      return text === undefined ? String(value) : text;
+      text = typeof value === "string" ? value : JSON.stringify(value);
     } catch (_) {
-      return String(value);
+      text = undefined;
     }
+    return text === undefined ? String(value) : text;
   };
-  const line = (values) => values.map(show).join(" ");
+  const line = (values) => values.map(asText).join(" ");
   const sandboxConsole = Object.freeze({
     log: (...values) => { stdout.push(line(values)); },
     info: (...values) => { stdout.push(line(values)); },
@@ -126,11 +126,12 @@
   });
   globalThis.performance = Object.freeze({ now: () => 0 });
   globalThis.fetch = () => {
-    throw new Error("fetch() is not supported in the sandbox. Use a tool to make HTTP requests instead.");
+    throw new Error("fetch() is unavailable inside the sandbox; make HTTP requests through a tool.");
   };
   globalThis.setTimeout = (callback, delay, ...values) => {
-    if (delay !== undefined && delay !== 0) {
-      throw new Error("setTimeout() only supports a delay of 0 in the sandbox.");
+    const immediate = delay === undefined || delay === 0;
+    if (!immediate) {
+      throw new Error("setTimeout() accepts no delay other than 0 inside the sandbox.");
     }
     queueMicrotask(() => callback(...values));
     return 0;
@@ -141,13 +142,13 @@
     return 0;
   };
   globalThis.setInterval = () => {
-    throw new Error("setInterval() is not supported in the sandbox.");
+    throw new Error("setInterval() is unavailable inside the sandbox.");
   };
   globalThis.clearInterval = () => {
-    throw new Error("clearInterval() is not supported in the sandbox.");
+    throw new Error("clearInterval() is unavailable inside the sandbox.");
   };
   globalThis.eval = () => {
-    throw new Error("eval() is not supported in the sandbox.");
+    throw new Error("eval() is unavailable inside the sandbox.");
   };
   for (const name of ["Deno", "__bootstrap"]) {
     try { delete globalThis[name]; } catch (_) { /* not configurable */ }
@@ -189,7 +190,7 @@
       // The program starts on the body's second line and the check follows
       // it on a line of its own, so stack positions read as the reference's.
       "\n" + source +
-        "\nif (typeof main !== \"function\") throw new Error(\"run_typescript code must define async function main().\");\nreturn await main(input);",
+        "\nif (\"function\" !== typeof main) throw new Error(\"run_typescript code has to declare an async function main().\");\nreturn await main(input);",
     );
     program(tools, step, {}, sandboxConsole).then(
       (value) => {

@@ -350,7 +350,7 @@ pub fn cleanup_worktree(
         .map_err(|source| startup_io(&worktree.root, source))?;
         writeln!(
             output,
-            "Remove it and delete its branch? This discards worktree changes, untracked files, and commits."
+            "Remove it along with its branch? Worktree changes, untracked files and commits are lost."
         )
         .map_err(|source| startup_io(&worktree.root, source))?;
         if !confirm(
@@ -370,7 +370,7 @@ pub fn cleanup_worktree(
     } else {
         writeln!(
             output,
-            "Branch {} existed before this session and was attached, not created by Vibe.",
+            "Branch {} predates this session: Vibe attached it rather than creating it.",
             pycompat::repr_str(&worktree.branch)
         )
         .map_err(|source| startup_io(&worktree.root, source))?;

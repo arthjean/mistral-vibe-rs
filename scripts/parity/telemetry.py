@@ -83,8 +83,9 @@ from typing import Any, get_args
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 from inprocess import SocketGuard, digest, patched_environ
 from telemetry_cases import (
     CONFIGURATIONS,
@@ -722,7 +723,7 @@ def capture_call_sites(tree: Path) -> dict[str, dict[str, Any]]:
                 continue
             name = _called_name(node.func)
             if name in EMISSION_CALLS and node.args:
-                event = node.args[0]
+                event: ast.expr | None = node.args[0]
                 payload = node.args[1] if len(node.args) > 1 else None
                 keywords = [keyword.arg for keyword in node.keywords]
             elif name == EMISSION_EVENT_CLASS:
@@ -828,8 +829,6 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
     reconciles an effect, and the copied-text, cancelled-action, slash-command
     and mention senders left the client with the Textual terminal client.
     """
-
-    from types import SimpleNamespace
 
     from vibe.core.config.admin_config import AdminConfigOutcome
     from vibe.core.telemetry.send import send_unified_tool_call_finished
@@ -1895,7 +1894,7 @@ def parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     return parser.parse_args()
 
 

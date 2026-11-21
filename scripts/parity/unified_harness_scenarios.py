@@ -12,12 +12,36 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import loop_capture
 
-call = loop_capture.call
-send = loop_capture.send
-START = loop_capture.START
-PERSISTED = loop_capture.PERSISTED
+# The steps `loop_capture.run_scenario` reads. `loop_capture` keeps the same
+# builders for `agent_loop.py`; a table imports only the standard library, so
+# this one holds its own.
+
+
+def call(name: str, arguments: dict[str, Any], identifier: str) -> dict[str, Any]:
+    return {"id": identifier, "name": name, "arguments": arguments}
+
+
+def send(method: str, pick: list[str] | None = None, **params: Any) -> dict[str, Any]:
+    step: dict[str, Any] = {"send": {"method": method, "params": params}}
+    if pick:
+        step["pick"] = pick
+    return step
+
+
+START: dict[str, Any] = {"start": {}}
+PERSISTED = {"persisted": True}
+TITLES = {"titles": True, "client": {"entrypoint": "cli"},
+          "config": "", "tables": "\n[session_logging]\ngenerate_titles = true\n"}
+
+
+def echo_steps(count: int) -> list[dict[str, Any]]:
+    """A turn of `count` tool steps and a closing answer."""
+
+    return [
+        {"toolCalls": [call("bash", {"command": f"echo step{index}"}, f"call_s{index}")]}
+        for index in range(1, count + 1)
+    ] + [{"text": "All steps ran."}]
 
 
 def config_read() -> dict[str, Any]:
@@ -273,7 +297,7 @@ async function main() {
 #: turn so the scripted answers reach the child in order.
 SUBAGENT_PROGRAM = """
 const attempt = async (run) => {
-  try { return await run(); } catch (error) { return { name: error.name, message: error.message }; }
+  try { return await run(); } catch (failure) { return { name: failure.name, message: failure.message }; }
 };
 async function main() {
   const spawned = await tools.subagent.spawn({ agentName: "helper", message: "Do the first part" });
@@ -334,7 +358,7 @@ REVIEWER = {"write": {"$ROOT/vibe-home/agents/reviewer.toml": (
 
 SUBAGENT_TYPED_PROGRAM = """
 const attempt = async (run) => {
-  try { return await run(); } catch (error) { return { name: error.name, message: error.message }; }
+  try { return await run(); } catch (failure) { return { name: failure.name, message: failure.message }; }
 };
 async function main() {
   const unknown = await attempt(() => tools.subagent.spawn({ agentName: "ghost", agentType: "nobody", message: "Hi" }));
@@ -558,22 +582,22 @@ def scenarios() -> list[dict[str, Any]]:
         },
         # -- background titles -----------------------------------------------
         {
-            **loop_capture.TITLES,
+            **TITLES,
             "name": "titles/first-answer",
             "backend": [{"text": "Answer one."}],
             "utility": [{"text": "Parser plan"}],
             "steps": [START, {"turn": "Plan the parser", "linger": 1.5}, PERSISTED],
         },
         {
-            **loop_capture.TITLES,
+            **TITLES,
             "name": "titles/tool-heavy-turn",
             "backend": [{**step, "delay": 0.6} if index in (2, 9) else step
-                        for index, step in enumerate(loop_capture.echo_steps(8))],
+                        for index, step in enumerate(echo_steps(8))],
             "utility": [{"text": "Echo marathon"}, {"text": "Echo marathon two"}],
             "steps": [START, {"turn": "Echo many times", "linger": 1.5}, PERSISTED],
         },
         {
-            **loop_capture.TITLES,
+            **TITLES,
             "name": "titles/after-compaction",
             "backend": [{"text": "Answer one."}, {"text": "A summary of the session."},
                         {"text": "Answer two."}],
@@ -583,14 +607,14 @@ def scenarios() -> list[dict[str, Any]]:
                       {"turn": "Second question", "linger": 1.5}, PERSISTED],
         },
         {
-            **loop_capture.TITLES,
+            **TITLES,
             "name": "titles/manual-title-wins",
             "backend": [{"text": "Answer one."}],
             "steps": [START, send("session/rename", sessionId="$S1", title="Mine"),
                       {"turn": "First question", "linger": 1.5}, PERSISTED],
         },
         {
-            **loop_capture.TITLES,
+            **TITLES,
             "name": "titles/generic-answer",
             "backend": [{"text": "Answer one."}, {"text": "Answer two."}],
             "utility": [{"text": "\"New session\""}, {"text": "  Second   try\nignored"}],

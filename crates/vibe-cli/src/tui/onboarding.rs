@@ -68,16 +68,16 @@ pub fn exit_plan(outcome: &OnboardingOutcome, global_env_file: &Path) -> ExitPla
             exit_code: Some(1),
             message: format!(
                 "The API key was not saved: this provider names an unusable environment \
-                 variable ({detail}). Update the provider's api_key_env_var setting in your \
-                 configuration and run setup again."
+                 variable ({detail}). Fix the api_key_env_var setting of that provider in \
+                 your configuration, then run setup again."
             ),
             persist_theme: false,
         },
         OnboardingOutcome::SaveError { detail } => ExitPlan {
             exit_code: None,
             message: format!(
-                "Warning: the API key could not be stored durably: {detail}. The key stays \
-                 available for this session only; you may need to add it to {} yourself.",
+                "Warning: the API key could not be stored durably: {detail}. The key works \
+                 for this session alone; adding it to {} yourself may be required.",
                 global_env_file.display()
             ),
             persist_theme: true,

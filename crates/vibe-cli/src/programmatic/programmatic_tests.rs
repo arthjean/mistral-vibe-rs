@@ -96,11 +96,11 @@ fn a_repository_without_a_project_is_a_teleport_error_and_anything_else_a_plain_
     use vibe_app_server::client::ClientError;
 
     let unlinked = super::teleport_refusal(&ClientError::InvalidResponse(
-        "no Vibe Code project is linked to this working directory".to_owned(),
+        "this working directory has no linked Vibe Code project".to_owned(),
     ));
     assert_eq!(
         unlinked.to_string(),
-        "Teleport error: No Vibe Code project is linked to this repository"
+        "Teleport error: This repository has no linked Vibe Code project"
     );
     let refused = super::teleport_refusal(&ClientError::InvalidResponse("git failed".to_owned()));
     assert!(

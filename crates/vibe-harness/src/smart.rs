@@ -4,7 +4,7 @@
 //! Reference `vibe/_smart_approve.py`, `vibe/_protected_paths.py` and the
 //! classify gate of `vibe/_local_actions.py` in the harness runtime. The
 //! classifier answers safe or risky; a risky call the person did not clearly
-//! ask for fails back to the model with the reason, and one they did, one the
+//! ask for is returned to the model as a failure carrying the reason, and one they did, one the
 //! model repeats, or one past the denial limits asks the person. A failed or
 //! unreadable classification never runs a call on its own.
 //!
@@ -37,13 +37,13 @@ const DENY_TOTAL_LIMIT: u32 = 20;
 const CLARIFICATION_TOOL: &str = "ask_user_question";
 
 /// Reference `_ERROR_REASON`.
-pub const ERROR_REASON: &str = "Smart approve could not verify this call is safe, so it was skipped. \
-Try a narrower, clearly safe alternative.";
+pub const ERROR_REASON: &str = "Smart approve skipped this call because it could not establish that it is \
+safe. Try a narrower alternative that is plainly safe.";
 /// The reason a risky verdict that gave none is escalated with.
-pub const UNCONFIRMED_REASON: &str = "Smart approve could not confirm this call is safe.";
+pub const UNCONFIRMED_REASON: &str = "Smart approve was unable to confirm that this call is safe.";
 /// Reference `_SMART_DENY_CONTINUE_HINT`.
-const DENY_CONTINUE_HINT: &str = " If a genuinely safer alternative exists, try it. If none does, repeat this \
-action -- a repeat asks the user to confirm it, rather than being blocked again.";
+const DENY_CONTINUE_HINT: &str = " Use a truly safer alternative if one exists. Otherwise send the same action \
+again: a repeated call goes to the user for confirmation instead of being blocked.";
 /// The note a call the session's own rules allowed carries.
 pub const RULES_NOTE: &str = "Auto-approved: allowed by your permission rules";
 /// The note a call a person approved earlier in the session carries.

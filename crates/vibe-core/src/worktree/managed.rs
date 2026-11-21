@@ -2,8 +2,8 @@
 //!
 //! Reference `ManagedWorktree` (`vibe/core/git/worktree/repository.py:679-1099`).
 //! A worktree is addressed by a path inside it, and [`ManagedWorktree::at`]
-//! answering [`None`] is the whole "is this one of ours?" question: a directory
-//! with no claim is not Vibe's, and each caller decides what that means.
+//! returning [`None`] settles whether this port owns it: an unclaimed directory
+//! belongs to someone else, and the caller chooses how to react.
 //!
 //! Removing a worktree that still holds work saves the work first, as a commit
 //! under [`SNAPSHOT_REF_PREFIX`] that nothing checks out, so explicit deletion
@@ -25,8 +25,8 @@ use super::{
     WorktreeRecoveryRecord, WorktreeRepository, validate_existing_worktree,
 };
 
-/// Where snapshots live: under `refs/vibe/` rather than `refs/heads/`, so a
-/// snapshot never appears among the branches or as something to push
+/// The namespace snapshots are written to. It sits in `refs/vibe/`, outside
+/// `refs/heads/`, which keeps them out of branch listings and out of pushes
 /// (`vibe/core/git/worktree/repository.py:35-38`).
 pub const SNAPSHOT_REF_PREFIX: &str = "refs/vibe/reaped";
 
@@ -70,8 +70,8 @@ pub struct WorktreeRelease {
     pub branch: Option<String>,
     pub branch_deleted: bool,
     pub reasons: Vec<String>,
-    /// Where the work went when a removed worktree still had some, and
-    /// [`None`] when it had none.
+    /// The ref that saved a removed worktree's leftover changes, or [`None`]
+    /// when it was clean.
     pub snapshot_ref: Option<String>,
 }
 
@@ -119,13 +119,13 @@ pub struct ManagedWorktree {
 }
 
 impl PreparedWorktree {
-    /// Commits the worktree's whole state to a ref nothing checks out, and
-    /// answers the ref.
+    /// Records everything in the worktree as a commit on a ref no checkout
+    /// uses, and returns that ref.
     ///
-    /// Untracked files are included and ignored ones are not. It is written
-    /// through a second index, so a failure leaves the worktree exactly as it
-    /// was, and a failure is the caller's signal to keep the worktree rather
-    /// than remove it (`vibe/core/git/worktree/repository.py:113-146`).
+    /// Untracked files go in, ignored files stay out. A separate index does the
+    /// writing, so an error leaves the worktree untouched, and the caller reads
+    /// an error as the instruction to retain the worktree instead of deleting it
+    /// (`vibe/core/git/worktree/repository.py:113-146`).
     pub fn snapshot(&self) -> Result<String, WorktreeError> {
         let reference = format!("{SNAPSHOT_REF_PREFIX}/{}", self.name);
         let failed = |error: &dyn std::fmt::Display| {
@@ -263,7 +263,7 @@ impl ManagedWorktree {
             pending.release();
             return Err(WorktreeError::failed(
                 &self.claim.name,
-                "the pending session hold does not match the session directory",
+                "the session directory differs from the one its pending hold names",
             ));
         }
         if self.claim.read().is_none() {
@@ -290,7 +290,7 @@ impl ManagedWorktree {
         self.claim.holders()
     }
 
-    /// Deletes the record, for a caller that removed the worktree itself.
+    /// Erases the record when the caller already took the worktree away.
     pub fn forget(&self) {
         self.claim.delete();
     }
@@ -407,9 +407,9 @@ impl ManagedWorktree {
     /// Releases this worktree for `session_id`, removing it when nobody else
     /// holds it.
     ///
-    /// [`None`] is a release by a caller that never held it, such as a delete
-    /// arriving after the session closed; every other holder still has to be
-    /// gone. A retained worktree's release discards its snapshot
+    /// [`None`] means the caller never held it, as with a delete that lands
+    /// once the session has ended; the remaining holders must all have left
+    /// first. Releasing a retained worktree throws away its snapshot
     /// (`vibe/core/git/worktree/repository.py:848-882`).
     pub fn release(&self, session_id: Option<&str>) -> Result<WorktreeRelease, WorktreeError> {
         let Some(record) = self.claim.read() else {
@@ -825,9 +825,9 @@ impl ManagedWorktree {
 
     /// The removal a release performs once nobody holds the worktree.
     ///
-    /// Work left behind is a reason to save it rather than to keep the
-    /// directory, so a dirty worktree is snapshotted and removed, and only a
-    /// snapshot that will not write keeps it. Holders are checked again just
+    /// Unsaved changes call for a snapshot, not for keeping the directory: a
+    /// dirty worktree gets snapshotted and then removed, and it survives only
+    /// when that snapshot cannot be written. Holders are checked again just
     /// before the removal, which narrows the window a session in another
     /// process could join in (`vibe/core/git/worktree/repository.py:1011-1099`).
     ///
@@ -948,7 +948,7 @@ fn ensure_saved_directory(name: &str, requested: &Path) -> Result<(), WorktreeEr
         WorktreeError::failed(
             name,
             format!(
-                "the restored worktree does not contain the saved directory `{}`",
+                "the saved directory `{}` is missing from the restored worktree",
                 requested.display()
             ),
         )

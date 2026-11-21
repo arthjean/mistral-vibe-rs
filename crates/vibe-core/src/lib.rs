@@ -74,4 +74,6 @@ pub mod upgrade;
 pub mod vision;
 pub mod whoami;
 pub mod workspace;
+#[cfg(test)]
+mod workspace_layers_tests;
 pub mod worktree;

@@ -58,7 +58,7 @@ pub(super) fn is_review_method(method: &str) -> bool {
 pub(super) fn no_session() -> ProtocolFault {
     ProtocolFault::plain(
         ProtocolErrorCode::Conflict,
-        "Start, resume, or continue a session before using this method",
+        "This method needs a session: start, resume or continue one first",
     )
 }
 

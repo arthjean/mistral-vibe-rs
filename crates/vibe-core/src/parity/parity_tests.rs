@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT, REFERENCE_VERSION, RESTORE_COMMAND, pin_commits};
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT, REFERENCE_VERSION, pin_commits};
 
 /// The two files allowed to spell the commit out, relative to the repository
 /// root. Every other oracle cites one of them.
@@ -215,13 +215,4 @@ fn no_capture_script_redeclares_the_pin() {
         vec!["scripts/parity/pin.py".to_owned()],
         "a capture script declares its own pin instead of importing `scripts/parity/pin`"
     );
-}
-
-#[test]
-fn the_restore_command_names_the_pinned_commit() {
-    assert!(
-        RESTORE_COMMAND.contains(REFERENCE_COMMIT),
-        "the documented restore command must target the pin it restores"
-    );
-    assert!(RESTORE_COMMAND.starts_with("git -C "));
 }

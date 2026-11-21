@@ -26,7 +26,7 @@ fn check_upgrade_reports_the_reference_failure_without_starting_a_session() {
 
     let text = String::from_utf8_lossy(&transcript);
     assert!(
-        text.contains("Update check failed: Network error while checking for updates."),
+        text.contains("Update check failed: The release server could not be reached."),
         "check-upgrade omitted the reference failure: {text}"
     );
     assert_eq!(

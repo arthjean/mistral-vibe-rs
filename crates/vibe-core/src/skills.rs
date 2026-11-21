@@ -307,8 +307,8 @@ pub fn skill_summary(skill: &SkillDefinition) -> Value {
 /// allowlist decides alone and locks every row, a skill a pattern disables,
 /// rather than its own name, stays disabled whatever a toggle writes, and so
 /// does one only another layer than the writable one disables, since
-/// `disabled_skills` concatenates across layers. `own` is the writable
-/// layer's own `disabled_skills`.
+/// `disabled_skills` concatenates across layers. `own` holds the
+/// `disabled_skills` list of the writable layer alone.
 #[must_use]
 pub fn installed_marks(
     name: &str,
@@ -466,7 +466,7 @@ pub const SKILL_CONTENT_CLOSING: &str = "</skill_content>";
 
 const ALREADY_LOADED_PREFIX: &str = "The skill `";
 const ALREADY_LOADED_SUFFIX: &str =
-    "` was already loaded earlier in this conversation; reuse those instructions.";
+    "` is already loaded in this conversation; keep following the instructions it gave.";
 
 /// What a repeated load of `name` answers instead of the rendered body.
 #[must_use]

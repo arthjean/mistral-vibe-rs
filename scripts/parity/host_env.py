@@ -29,6 +29,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from typing import Any, Protocol
 
 #: Carried over from the driver's own environment on Windows.
 WINDOWS_BASE = ("SystemRoot", "SystemDrive", "windir", "COMSPEC", "PATHEXT", "TEMP", "TMP")
@@ -58,6 +59,34 @@ def windows_base(home: str | None = None) -> dict[str, str]:
     return base
 
 
+#: What a Linux child without a session bus resolves on its own: the
+#: ``keyring`` library's backend that raises ``NoKeyringError`` on every read,
+#: write and removal (measured against keyring 25.7.0, the version the pin's
+#: ``uv.lock`` resolves).
+NO_KEYRING_BACKEND = "keyring.backends.fail.Keyring"
+
+
+def keyring_isolation(platform: str | None = None) -> dict[str, str]:
+    """The variables that keep a child off the host's credential store, for
+    ``platform`` (an ``os.name`` value, this host's by default).
+
+    On Linux the absent session bus :func:`isolated` sets already leaves the
+    reference's ``keyring`` library and the port's Secret Service client with
+    no store, so nothing is added and a Linux capture keeps the environment it
+    had. The Windows Credential Manager needs no bus: there
+    ``PYTHON_KEYRING_BACKEND`` names :data:`NO_KEYRING_BACKEND`, which the
+    reference's library loads before any other and which this port honors in
+    ``vibe_core::auth::StorelessBackend``, so both answer as a Linux
+    capture records and neither reads nor writes the vault. A scenario that
+    installs a backend of its own (``mcp_catalog.py``) sets the variable again
+    after these.
+    """
+
+    if (os.name if platform is None else platform) != "nt":
+        return {}
+    return {"PYTHON_KEYRING_BACKEND": NO_KEYRING_BACKEND}
+
+
 def isolated(
     home: str | os.PathLike[str], vibe_home: str | os.PathLike[str], **variables: str
 ) -> dict[str, str]:
@@ -65,9 +94,10 @@ def isolated(
 
     It carries this machine's ``PATH``, the fixture homes, ``variables`` (what
     a scenario points the child at, such as its provider), and switches that
-    keep the host out of the run: no color, a dumb terminal, CI behavior, and a
-    session bus that does not exist, so no keyring answers. A caller adds
-    anything else after these.
+    keep the host out of the run: no color, a dumb terminal, CI behavior, a
+    session bus that does not exist, so no Linux keyring answers, and on
+    Windows the keyring backend that stores nothing (:func:`keyring_isolation`).
+    A caller adds anything else after these.
     """
 
     home = str(home)
@@ -82,6 +112,7 @@ def isolated(
         "NO_COLOR": "1",
         "CI": "true",
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+        **keyring_isolation(),
         # A fixed string hash. Since v3.0.0 the reference builds state patches
         # by walking changed keys as a set (`make_json_patch` in
         # `vibe/app_server/_patch.py`), so with Python's per-process hash
@@ -220,7 +251,7 @@ if not kernel32.GenerateConsoleCtrlEvent(0, 0):
 """
 
 
-def interruptible() -> dict[str, object]:
+def interruptible() -> dict[str, Any]:
     """``Popen`` arguments for a child :func:`interrupt` will reach.
 
     Windows has no SIGINT to send: Ctrl+C is a console event raised for every
@@ -231,7 +262,7 @@ def interruptible() -> dict[str, object]:
     nothing is added.
     """
 
-    if os.name != "nt":
+    if sys.platform != "win32":
         return {}
     import ctypes
 
@@ -246,7 +277,7 @@ def interrupt(process: subprocess.Popen) -> None:
     """Deliver what a terminal's Ctrl+C delivers: SIGINT, or on Windows the
     console Ctrl+C event (the child must come from :func:`interruptible`)."""
 
-    if os.name != "nt":
+    if sys.platform != "win32":
         process.send_signal(signal.SIGINT)
         return
     subprocess.run(
@@ -257,46 +288,81 @@ def interrupt(process: subprocess.Popen) -> None:
     )
 
 
-def forget_credential(service: str, account: str) -> None:
+class CredentialVault(Protocol):
+    """The two Credential Manager calls :func:`forget_credential` makes."""
+
+    def holder(self, target: str) -> str | None:
+        """The user name of the generic credential ``target``, or ``None``."""
+
+    def delete(self, target: str) -> None:
+        """Remove the generic credential ``target``; an absent one is no error."""
+
+
+class WindowsVault:
+    """:class:`CredentialVault` over ``advapi32``; only Windows has one."""
+
+    def __init__(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        class Credential(ctypes.Structure):
+            _fields_ = [
+                ("Flags", wintypes.DWORD),
+                ("Type", wintypes.DWORD),
+                ("TargetName", wintypes.LPWSTR),
+                ("Comment", wintypes.LPWSTR),
+                ("LastWritten", wintypes.FILETIME),
+                ("CredentialBlobSize", wintypes.DWORD),
+                ("CredentialBlob", ctypes.c_void_p),
+                ("Persist", wintypes.DWORD),
+                ("AttributeCount", wintypes.DWORD),
+                ("Attributes", ctypes.c_void_p),
+                ("TargetAlias", wintypes.LPWSTR),
+                ("UserName", wintypes.LPWSTR),
+            ]
+
+        self._ctypes = ctypes
+        self._credential = Credential
+        # `WinDLL` exists only on Windows, where this class is built; read it
+        # by name so a type check on another host does not refuse it.
+        self._advapi32 = getattr(ctypes, "WinDLL")("advapi32", use_last_error=True)  # noqa: B009
+
+    #: ``CRED_TYPE_GENERIC``, the type both implementations write.
+    GENERIC = 1
+
+    def holder(self, target: str) -> str | None:
+        found = self._ctypes.POINTER(self._credential)()
+        if not self._advapi32.CredReadW(target, self.GENERIC, 0, self._ctypes.byref(found)):
+            return None
+        try:
+            return found.contents.UserName
+        finally:
+            self._advapi32.CredFree(found)
+
+    def delete(self, target: str) -> None:
+        self._advapi32.CredDeleteW(target, self.GENERIC, 0)
+
+
+def forget_credential(service: str, account: str, vault: CredentialVault | None = None) -> None:
     """Remove what a scenario stored for ``account`` in the Windows vault.
 
-    Linux captures turn the keyring off through ``DBUS_SESSION_BUS_ADDRESS``;
-    the Windows Credential Manager has no such switch, so a credential a
-    scenario stores outlives the run and reaches the next one. This removes
-    the entries the reference's ``WinVaultKeyring`` and the port write for the
-    account (the plain ``service`` target only while ``account`` holds it, the
+    :func:`isolated` keeps a child off the vault, so a capture writes nothing
+    there; this sweeps what a run from before that switch, or a child started
+    without it, left behind. It removes the entries the reference's
+    ``WinVaultKeyring`` and the port write for the account (the plain
+    ``service`` target only while ``account`` holds it, the
     ``account@service`` target, and the earlier port's ``account.service``)
-    and leaves every other holder in place. Off Windows nothing happens.
+    and leaves every other holder in place. A driver calls it once before it
+    captures anything, so a run killed mid-scenario is cleaned by the next
+    one, and again when the scenario ends. Off Windows, without a ``vault``,
+    nothing happens.
     """
 
-    if os.name != "nt":
-        return
-    import ctypes
-    from ctypes import wintypes
-
-    class Credential(ctypes.Structure):
-        _fields_ = [
-            ("Flags", wintypes.DWORD),
-            ("Type", wintypes.DWORD),
-            ("TargetName", wintypes.LPWSTR),
-            ("Comment", wintypes.LPWSTR),
-            ("LastWritten", wintypes.FILETIME),
-            ("CredentialBlobSize", wintypes.DWORD),
-            ("CredentialBlob", ctypes.c_void_p),
-            ("Persist", wintypes.DWORD),
-            ("AttributeCount", wintypes.DWORD),
-            ("Attributes", ctypes.c_void_p),
-            ("TargetAlias", wintypes.LPWSTR),
-            ("UserName", wintypes.LPWSTR),
-        ]
-
-    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    generic = 1  # CRED_TYPE_GENERIC
-    found = ctypes.POINTER(Credential)()
-    if advapi32.CredReadW(service, generic, 0, ctypes.byref(found)):
-        holder = found.contents.UserName
-        advapi32.CredFree(found)
-        if holder == account:
-            advapi32.CredDeleteW(service, generic, 0)
+    if vault is None:
+        if os.name != "nt":
+            return
+        vault = WindowsVault()
+    if vault.holder(service) == account:
+        vault.delete(service)
     for target in (f"{account}@{service}", f"{account}.{service}"):
-        advapi32.CredDeleteW(target, generic, 0)
+        vault.delete(target)

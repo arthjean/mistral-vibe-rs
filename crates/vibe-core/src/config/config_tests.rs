@@ -18,7 +18,7 @@ fn table(input: &str) -> Table {
 
 fn config(root: &Path) -> LayeredConfig {
     let home = root.join("home/.vibe");
-    let project = root.join("project");
+    let project = root.join("home/project");
     fs::create_dir_all(project.join(".vibe")).expect("project config directory");
     fs::create_dir_all(&home).expect("user config directory");
     LayeredConfig::new(

@@ -131,8 +131,8 @@ impl std::fmt::Display for PromptFileError {
                 prompt_id,
             } => write!(
                 formatter,
-                "invalid {setting_name} value: '{prompt_id}' must be a bare filename without path \
-                 separators"
+                "invalid {setting_name} value: '{prompt_id}' is not a plain file name (it holds a \
+                 path separator)"
             ),
             Self::Missing {
                 setting_name,
@@ -158,8 +158,8 @@ impl std::fmt::Display for PromptFileError {
                 };
                 write!(
                     formatter,
-                    "invalid {setting_name} value: '{prompt_id}'. Must be one of the available \
-                     prompts ({builtin_hint}), or correspond to a .md file in {dirs_hint} \
+                    "invalid {setting_name} value: '{prompt_id}'. Use a built-in prompt \
+                     ({builtin_hint}) or the name of a .md file under {dirs_hint} \
                      (available: {available_hint})"
                 )
             }

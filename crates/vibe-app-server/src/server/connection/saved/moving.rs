@@ -152,7 +152,7 @@ fn relocation_target(
         return Err(ProtocolFault::plain(
             ProtocolErrorCode::InvalidParams,
             format!(
-                "Not a worktree of this session's repository: {}",
+                "This session's repository holds no such worktree: {}",
                 target.display()
             ),
         ));

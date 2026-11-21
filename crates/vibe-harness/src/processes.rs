@@ -155,7 +155,7 @@ fn success(value: Value) -> ToolResult {
 }
 
 const UNKNOWN_PROCESS: &str = "Unknown background process";
-const STOP_FAILED: &str = "Background process did not reach a terminal PTY-root state";
+const STOP_FAILED: &str = "The background process never reached a terminal state at its PTY root";
 
 /// Why a stop answers no terminal state.
 enum StopFailure {
@@ -513,7 +513,7 @@ impl ProcessManager {
             _ => (
                 "warning",
                 format!(
-                    "The App Server can no longer manage background process {} or confirm whether it is running.",
+                    "The App Server lost control of background process {} and cannot tell whether it still runs.",
                     process.id
                 ),
             ),

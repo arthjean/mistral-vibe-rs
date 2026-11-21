@@ -412,15 +412,16 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = vibe_core::parity::replay::pinned_reference("experiments startup") else {
         return;
     };
+    let run = vibe_core::parity::replay::RunDirectory::new("experiments-startup");
     let repository = repo_root();
-    let recaptured = repository.join("target/startup-corpus.json");
+    let recaptured = run.join("startup-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/startup-full.json"))
+        .arg(run.join("startup-full.json"))
         .arg("--corpus")
-        .arg(repository.join("target/startup-engine-corpus.json"))
+        .arg(run.join("startup-engine-corpus.json"))
         .arg("--startup-corpus")
         .arg(&recaptured)
         .current_dir(&repository)

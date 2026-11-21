@@ -64,13 +64,6 @@ pub const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
 /// the capture scripts read.
 pub const REFERENCE_VARIABLE: &str = "VIBE_REFERENCE";
 
-/// The single documented command that returns a checkout to the pin. Since
-/// probes gate on a materialized environment ([`live`]) instead of the
-/// checkout's `HEAD`, nothing requires it; US-029 of
-/// `tasks/prd-trustworthy-parity-v3.md` decides whether it goes.
-pub const RESTORE_COMMAND: &str =
-    "git -C /home/arthur/dev/mistral-vibe checkout c96a6dbb34d34f8a868b3f67b279ecabbf1aa616";
-
 /// The checkout root this run should use: [`REFERENCE_VARIABLE`] when set,
 /// otherwise [`REFERENCE_ROOT`]. The checkout is only the object store
 /// `scripts/parity/repin.py materialize` reads with `git archive`: no probe
@@ -108,11 +101,17 @@ pub mod live;
 pub mod manifest;
 #[cfg(any(test, feature = "parity-replay"))]
 pub mod replay;
+#[cfg(any(test, feature = "parity-replay"))]
+pub mod sensitivity;
 
 #[cfg(test)]
 mod capture_guard_tests;
 #[cfg(test)]
 mod census_tests;
+#[cfg(test)]
+mod host_env_tests;
+#[cfg(test)]
+mod import_rules_tests;
 #[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]
@@ -121,6 +120,8 @@ mod licensing_tests;
 mod live_tests;
 #[cfg(test)]
 mod manifest_tests;
+#[cfg(test)]
+mod normalization_tests;
 #[cfg(test)]
 mod parity_tests;
 #[cfg(test)]

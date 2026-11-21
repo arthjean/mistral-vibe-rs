@@ -1167,8 +1167,8 @@
       ],
       "loggerName": "vibe",
       "patternDigest": {
-        "digest": "943341824f8d68e4ddc5ffc58eb94bfeac690139e3055081ba0fed3b1f6c8375",
-        "length": 125
+        "prose": 125,
+        "sha256": "943341824f8d68e4ddc5ffc58eb94bfeac690139e3055081ba0fed3b1f6c8375"
       },
       "patternGroups": 5,
       "pollIntervalSeconds": 0.5,
@@ -4956,8 +4956,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774",
-        "length": 38
+        "prose": 38,
+        "sha256": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774"
       }
     },
     {
@@ -4986,8 +4986,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774",
-        "length": 38
+        "prose": 38,
+        "sha256": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774"
       }
     },
     {
@@ -5016,8 +5016,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f",
-        "length": 38
+        "prose": 38,
+        "sha256": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f"
       }
     },
     {
@@ -5046,8 +5046,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f",
-        "length": 38
+        "prose": 38,
+        "sha256": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f"
       }
     },
     {
@@ -5076,8 +5076,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "76f09c527d093e0114b0044eaf19634ec0cbcdf253aa3f79348366770e5d98b2",
-        "length": 24
+        "prose": 24,
+        "sha256": "76f09c527d093e0114b0044eaf19634ec0cbcdf253aa3f79348366770e5d98b2"
       }
     },
     {

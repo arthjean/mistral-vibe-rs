@@ -805,11 +805,11 @@ fn merge_tail(history: &[TranscriptEntry], latest: Vec<TranscriptEntry>) -> Vec<
 }
 
 /// Said in a child's transcript when the operator tries to write to it.
-const READ_ONLY_MESSAGE: &str = "A subagent only takes instructions from the main agent. Go back \
-     to Main conversation and ask the main agent to stop it.";
+const READ_ONLY_MESSAGE: &str = "Only the main agent can direct a subagent. Return to Main \
+     conversation and have the main agent stop it.";
 /// Said in a child's transcript once it finishes its work.
-const READY_MESSAGE: &str = "This subagent finished and is waiting. Go back to Main conversation \
-     and ask the main agent to give it a new goal or to stop it.";
+const READY_MESSAGE: &str = "This subagent is done and idle. Return to Main conversation and \
+     have the main agent hand it a new goal or stop it.";
 const LOADING_MESSAGE: &str = "Reading the subagent's transcript…";
 const EMPTY_MESSAGE: &str = "Nothing has been written to this transcript yet.";
 const CLOSED_MESSAGE: &str = "This subagent has closed, and its transcript can no longer be read.";

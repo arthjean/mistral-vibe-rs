@@ -59,10 +59,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 
 # Turns name their user message, which a v3 rewind or fork resolves an entry
@@ -433,7 +435,7 @@ class Normalizer(app_server_client.Normalizer):
         rendered: dict[str, Any] = {}
         for key, item in metadata.items():
             if key in META_TIME_KEYS:
-                rendered[key] = "<time>" if item is not None else None
+                rendered[key] = blackbox.time_token(item)
             elif key in META_ID_KEYS:
                 rendered[key] = self.identity(item) if isinstance(item, str) and item else item
             elif key in META_OPAQUE_KEYS:
@@ -508,7 +510,7 @@ def on(server: int, step: dict[str, Any]) -> dict[str, Any]:
     return {**step, "on": server}
 
 
-START = {"start": {}}
+START: dict[str, Any] = {"start": {}}
 RESTART = {"restart": True}
 STORE = {"store": True}
 
@@ -520,7 +522,7 @@ def turn(text: str, session: str = "$S1") -> dict[str, Any]:
 GIT = ["git", "-c", "user.name=Oracle", "-c", "user.email=oracle@example.invalid"]
 
 #: A session laid out the way the reference writes one, with two exchanges.
-SEEDED_META = {
+SEEDED_META: dict[str, Any] = {
     "session_id": "5eed0000-0000-4000-8000-00000000abcd",
     "parent_session_id": None,
     "start_time": "2026-01-02T03:04:05.000000+00:00",
@@ -920,12 +922,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=app_server_client.QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'sessions')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:

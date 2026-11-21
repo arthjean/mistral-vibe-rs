@@ -25,7 +25,9 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("plugins-parity/corpus.json");
@@ -42,8 +44,34 @@ const CAPTURE: Capture = Capture {
     ],
 };
 
+/// The accepted divergence the refusals below stand on.
+const REFUSALS: &str = "Server refusals and errors are this port's own prose";
+
 /// Every text this port words its own way, digest by digest.
-const PROSE: &[OwnProse] = &[];
+const PROSE: &[OwnProse] = &[
+    OwnProse {
+        scenarios: &["unified/mcp-servers"],
+        pointer: "/*/answer/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "35",
+        accepted: REFUSALS,
+        reason: "`mcp_catalog/remove` refuses a server a plugin owns in this port's own sentence, \
+                 under the reference's `invalid_params` code",
+    },
+    OwnProse {
+        scenarios: &["unified/no-session"],
+        pointer: "/*/answer/message",
+        count: 2,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "35",
+        accepted: REFUSALS,
+        reason: "`plugin/info` and `plugin/reload` ask for a session in this port's own sentence, \
+                 under the reference's `conflict` code",
+    },
+];
 
 #[test]
 #[cfg_attr(

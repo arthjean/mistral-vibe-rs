@@ -5,8 +5,8 @@
 //! global dotenv, and answers where the active credential comes from. The
 //! precedence mirrors how the reference loads credentials at startup: the
 //! dotenv is injected into the process environment before the keyring is read,
-//! so a dotenv entry is the active credential even when the keyring also holds
-//! one, and a value that was in the environment before the dotenv load belongs
+//! so a dotenv entry wins over a keyring entry for the same key, and a value
+//! the environment carried before the dotenv load belongs
 //! to the process however many other sources hold copies.
 
 use std::collections::BTreeMap;

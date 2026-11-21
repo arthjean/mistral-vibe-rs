@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::canonical::normalize_nfc;
 use crate::platform::resolve_lenient;
 
-/// The plugin root spelled as a reference to itself.
+/// How a path naming the plugin root itself is written.
 pub const PLUGIN_ROOT_REF: &str = ".";
 
 /// A file or directory inside one plugin. Reference `PluginPathRef`.

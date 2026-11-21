@@ -74,7 +74,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -85,7 +85,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -103,7 +103,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -146,7 +146,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -157,7 +157,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -288,13 +288,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -455,7 +455,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -466,7 +466,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -484,7 +484,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -576,7 +576,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -612,7 +612,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -701,7 +701,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -712,7 +712,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -838,13 +838,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -971,7 +971,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -982,7 +982,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -1000,7 +1000,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -1037,7 +1037,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -1048,7 +1048,7 @@
                     "text": "Thinking it over.",
                     "turnId": "<id-2>",
                     "type": "reasoning",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -1091,7 +1091,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -1102,7 +1102,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -1255,13 +1255,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -1439,7 +1439,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -1450,7 +1450,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -1468,7 +1468,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -1560,7 +1560,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -1596,7 +1596,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -1679,7 +1679,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -1690,7 +1690,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -1816,13 +1816,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -2005,7 +2005,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -2016,7 +2016,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -2034,7 +2034,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -2132,7 +2132,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -2143,7 +2143,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -2269,13 +2269,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -2444,7 +2444,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -2455,7 +2455,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -2473,7 +2473,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -2571,7 +2571,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -2582,7 +2582,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -2708,13 +2708,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -2900,7 +2900,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -2911,7 +2911,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -2929,7 +2929,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -3027,7 +3027,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -3038,7 +3038,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -3164,13 +3164,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -3378,7 +3378,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -3389,7 +3389,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -3407,7 +3407,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -3499,7 +3499,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -3535,7 +3535,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -3546,7 +3546,7 @@
                 "params": {
                   "entry": {
                     "callbackId": "<id-5>",
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "choices": [
                         "approve",
@@ -3612,7 +3612,7 @@
                     },
                     "turnId": "<id-2>",
                     "type": "callback",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -3797,7 +3797,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-2>-1",
@@ -3808,7 +3808,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -3929,13 +3929,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -4111,7 +4111,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -4122,7 +4122,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -4140,7 +4140,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -4232,7 +4232,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "content": null,
                       "hookName": null,
@@ -4254,7 +4254,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "notice",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -4264,7 +4264,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "content": {
                         "prose": 18,
@@ -4289,7 +4289,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "notice",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -4299,7 +4299,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "content": null,
                       "hookName": null,
@@ -4321,7 +4321,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "notice",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -4331,7 +4331,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -4378,7 +4378,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -4394,7 +4394,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
                     "inputEntryId": "user-<id-2>-1",
@@ -4405,7 +4405,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -4531,13 +4531,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -4758,7 +4758,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -4769,7 +4769,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -4787,7 +4787,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -4830,7 +4830,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -4841,7 +4841,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -4972,13 +4972,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -5016,7 +5016,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
                     "inputEntryId": null,
@@ -5027,7 +5027,7 @@
                     "source": "turn_start",
                     "turnId": "<id-5>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -5045,7 +5045,7 @@
                     "inputEntryId": "user-<id-5>-3",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -5132,7 +5132,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -5168,7 +5168,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-5>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-5>"
@@ -5257,7 +5257,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
                     "inputEntryId": "user-<id-5>-3",
@@ -5268,7 +5268,7 @@
                     "source": "harness",
                     "turnId": "<id-5>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -5389,13 +5389,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-5>-3",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -5573,7 +5573,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -5584,7 +5584,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -5602,7 +5602,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -5694,7 +5694,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -5730,7 +5730,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -5819,7 +5819,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -5830,7 +5830,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -5981,13 +5981,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -6204,7 +6204,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -6215,7 +6215,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -6233,7 +6233,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -6276,7 +6276,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -6287,7 +6287,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -6402,7 +6402,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -6438,7 +6438,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -6521,7 +6521,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-2>-1",
@@ -6532,7 +6532,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -6658,13 +6658,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -6678,12 +6678,12 @@
             "response": {
               "id": 104,
               "result": {
-                "lastEventId": "<nonzero>",
+                "lastEventId": 1,
                 "state": {
                   "activeCallbacks": [],
                   "backgroundProcesses": [],
                   "childSessions": [],
-                  "eventId": "<nonzero>",
+                  "eventId": 1,
                   "format": "vibe.public-session-state/v1",
                   "history": [
                     {
@@ -6693,7 +6693,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
                       "inputEntryId": null,
@@ -6704,7 +6704,7 @@
                       "source": "turn_start",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
@@ -6714,7 +6714,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
                       "inputEntryId": "user-<id-2>-1",
@@ -6727,11 +6727,11 @@
                       "source": "harness",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "detail": {
                         "display": {
                           "content": null,
@@ -6785,7 +6785,7 @@
                       "title": "file_system.bash",
                       "turnId": "<id-2>",
                       "type": "effect",
-                      "updatedAt": "<time>"
+                      "updatedAt": "<time:int>"
                     },
                     {
                       "content": [
@@ -6794,7 +6794,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-6>",
                       "inputEntryId": "user-<id-2>-1",
@@ -6807,7 +6807,7 @@
                       "source": "harness",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     }
                   ],
@@ -6829,14 +6829,14 @@
                       "safety": "yolo"
                     },
                     "archivedAt": null,
-                    "bumpedAt": "<time>",
+                    "bumpedAt": "<time:int>",
                     "contextUsage": {
                       "cachedInputTokens": 0,
                       "inputTokens": 10,
                       "outputTokens": 5,
                       "totalTokens": 15
                     },
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "cwd": "<ws>",
                     "harness": "unified",
                     "id": "<id-1>",
@@ -6858,7 +6858,7 @@
                       "outputTokens": 10,
                       "totalTokens": 30
                     },
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "workspaceRoots": [],
                     "worktree": null
                   },
@@ -6869,13 +6869,13 @@
                   },
                   "turns": [
                     {
-                      "completedAt": "<time>",
+                      "completedAt": "<time:int>",
                       "error": null,
                       "id": "<id-2>",
                       "inputEntryId": "user-<id-2>-1",
                       "queueItemId": null,
                       "sessionId": "<id-1>",
-                      "startedAt": "<time>",
+                      "startedAt": "<time:int>",
                       "status": "completed",
                       "stopReason": null
                     }
@@ -7041,7 +7041,7 @@
                         "type": "resource"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -7052,7 +7052,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": {
                       "content": [
                         {
@@ -7079,7 +7079,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -7122,7 +7122,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -7133,7 +7133,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -7264,13 +7264,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -7300,12 +7300,12 @@
             "response": {
               "id": 105,
               "result": {
-                "lastEventId": "<nonzero>",
+                "lastEventId": 1,
                 "state": {
                   "activeCallbacks": [],
                   "backgroundProcesses": [],
                   "childSessions": [],
-                  "eventId": "<nonzero>",
+                  "eventId": 1,
                   "format": "vibe.public-session-state/v1",
                   "history": [
                     {
@@ -7324,7 +7324,7 @@
                           "type": "resource"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
                       "inputEntryId": null,
@@ -7335,7 +7335,7 @@
                       "source": "turn_start",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": {
                         "content": [
                           {
@@ -7354,7 +7354,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
                       "inputEntryId": "user-<id-2>-1",
@@ -7367,7 +7367,7 @@
                       "source": "harness",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     }
                   ],
@@ -7389,14 +7389,14 @@
                       "safety": "yolo"
                     },
                     "archivedAt": null,
-                    "bumpedAt": "<time>",
+                    "bumpedAt": "<time:int>",
                     "contextUsage": {
                       "cachedInputTokens": 0,
                       "inputTokens": 10,
                       "outputTokens": 5,
                       "totalTokens": 15
                     },
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "cwd": "<ws>",
                     "harness": "unified",
                     "id": "<id-1>",
@@ -7418,7 +7418,7 @@
                       "outputTokens": 5,
                       "totalTokens": 15
                     },
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "workspaceRoots": [],
                     "worktree": null
                   },
@@ -7429,13 +7429,13 @@
                   },
                   "turns": [
                     {
-                      "completedAt": "<time>",
+                      "completedAt": "<time:int>",
                       "error": null,
                       "id": "<id-2>",
                       "inputEntryId": "user-<id-2>-1",
                       "queueItemId": null,
                       "sessionId": "<id-1>",
-                      "startedAt": "<time>",
+                      "startedAt": "<time:int>",
                       "status": "completed",
                       "stopReason": null
                     }
@@ -7622,7 +7622,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -7633,7 +7633,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -7651,7 +7651,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -7743,7 +7743,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -7779,7 +7779,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -7871,13 +7871,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "interrupted",
                     "stopReason": null
                   }
@@ -7931,7 +7931,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
                     "inputEntryId": null,
@@ -7942,7 +7942,7 @@
                     "source": "turn_start",
                     "turnId": "<id-5>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -7960,7 +7960,7 @@
                     "inputEntryId": "user-<id-5>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -8003,7 +8003,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-7>",
                     "inputEntryId": "user-<id-5>-4",
@@ -8014,7 +8014,7 @@
                     "source": "harness",
                     "turnId": "<id-5>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -8140,13 +8140,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-5>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -8333,7 +8333,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -8344,7 +8344,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -8362,7 +8362,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -8454,7 +8454,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "content": null,
                       "hookName": null,
@@ -8476,7 +8476,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "notice",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -8486,7 +8486,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "content": null,
                       "hookName": null,
@@ -8508,7 +8508,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "notice",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -8537,13 +8537,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "interrupted",
                     "stopReason": null
                   }
@@ -8600,7 +8600,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-8>",
                     "inputEntryId": null,
@@ -8611,7 +8611,7 @@
                     "source": "turn_start",
                     "turnId": "<id-7>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -8629,7 +8629,7 @@
                     "inputEntryId": "user-<id-7>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -8672,7 +8672,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
                     "inputEntryId": "user-<id-7>-4",
@@ -8683,7 +8683,7 @@
                     "source": "harness",
                     "turnId": "<id-7>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -8809,13 +8809,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-7>",
                     "inputEntryId": "user-<id-7>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -8993,7 +8993,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -9004,7 +9004,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -9022,7 +9022,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -9114,7 +9114,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -9150,7 +9150,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -9161,7 +9161,7 @@
                 "params": {
                   "entry": {
                     "callbackId": "<id-5>",
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "choices": [
                         "approve",
@@ -9227,7 +9227,7 @@
                     },
                     "turnId": "<id-2>",
                     "type": "callback",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -9396,13 +9396,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "interrupted",
                     "stopReason": null
                   }
@@ -9586,7 +9586,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -9597,7 +9597,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -9615,7 +9615,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -9713,7 +9713,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -9724,7 +9724,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -9850,13 +9850,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -10181,7 +10181,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -10192,7 +10192,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -10210,7 +10210,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -10302,7 +10302,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -10338,7 +10338,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -10349,7 +10349,7 @@
                 "params": {
                   "entry": {
                     "callbackId": "<id-5>",
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "choices": [
                         "approve",
@@ -10415,7 +10415,7 @@
                     },
                     "turnId": "<id-2>",
                     "type": "callback",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -10572,7 +10572,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-2>-1",
@@ -10583,7 +10583,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -10704,13 +10704,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -10748,7 +10748,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-8>",
                     "inputEntryId": null,
@@ -10759,7 +10759,7 @@
                     "source": "turn_start",
                     "turnId": "<id-7>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -10777,7 +10777,7 @@
                     "inputEntryId": "user-<id-7>-6",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -10864,7 +10864,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -10900,7 +10900,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-7>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-7>"
@@ -10978,7 +10978,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-10>",
                     "inputEntryId": "user-<id-7>-6",
@@ -10989,7 +10989,7 @@
                     "source": "harness",
                     "turnId": "<id-7>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -11110,13 +11110,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-7>",
                     "inputEntryId": "user-<id-7>-6",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -11384,7 +11384,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -11395,7 +11395,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -11413,7 +11413,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -11561,7 +11561,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -11572,7 +11572,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -11698,13 +11698,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -11908,7 +11908,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -11919,7 +11919,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -11937,7 +11937,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -12035,7 +12035,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -12046,7 +12046,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -12172,13 +12172,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -12513,7 +12513,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -12524,7 +12524,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -12542,7 +12542,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -12740,7 +12740,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -12751,7 +12751,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -12877,13 +12877,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -13096,7 +13096,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -13107,7 +13107,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -13125,7 +13125,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -13223,7 +13223,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -13234,7 +13234,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -13360,13 +13360,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -13564,7 +13564,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -13575,7 +13575,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -13593,7 +13593,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -13685,7 +13685,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -13721,7 +13721,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -13749,7 +13749,7 @@
                         "type": "resource"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": null,
@@ -13760,7 +13760,7 @@
                     "source": "turn_steer",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -13878,7 +13878,7 @@
                     "inputEntryId": "user-<id-2>-3",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -13894,7 +13894,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-2>-3",
@@ -13905,7 +13905,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -14031,13 +14031,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-3",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -14190,7 +14190,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -14201,7 +14201,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -14219,7 +14219,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -14262,7 +14262,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -14273,7 +14273,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -14404,13 +14404,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -14548,7 +14548,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -14559,7 +14559,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -14577,7 +14577,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -14620,7 +14620,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -14631,7 +14631,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -14762,13 +14762,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -15893,7 +15893,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -15904,7 +15904,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -15922,7 +15922,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -16014,7 +16014,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16050,7 +16050,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -16183,7 +16183,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16219,7 +16219,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -16352,7 +16352,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16388,7 +16388,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -16521,7 +16521,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16557,7 +16557,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -16690,7 +16690,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16726,7 +16726,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -16859,7 +16859,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -16895,7 +16895,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -17028,7 +17028,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -17064,7 +17064,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -17197,7 +17197,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -17233,7 +17233,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -17322,7 +17322,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-12>",
                     "inputEntryId": "user-<id-2>-1",
@@ -17333,7 +17333,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -17459,13 +17459,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -17785,7 +17785,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -17796,7 +17796,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -17814,7 +17814,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -17857,7 +17857,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -17868,7 +17868,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -17999,13 +17999,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -18033,7 +18033,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "attempt": 1,
                       "trigger": "manual"
@@ -18050,7 +18050,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -18165,7 +18165,7 @@
                   "activeCallbacks": [],
                   "backgroundProcesses": [],
                   "childSessions": [],
-                  "eventId": "<nonzero>",
+                  "eventId": 1,
                   "format": "vibe.public-session-state/v1",
                   "history": [
                     {
@@ -18175,7 +18175,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
                       "inputEntryId": null,
@@ -18186,7 +18186,7 @@
                       "source": "turn_start",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
@@ -18196,7 +18196,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
                       "inputEntryId": "user-<id-2>-1",
@@ -18209,11 +18209,11 @@
                       "source": "harness",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "details": {
                         "attempt": 1,
                         "summaryLength": 25,
@@ -18231,7 +18231,7 @@
                       "sessionId": "<id-1>",
                       "turnId": null,
                       "type": "checkpoint",
-                      "updatedAt": "<time>"
+                      "updatedAt": "<time:int>"
                     }
                   ],
                   "historyBeforeCursor": null,
@@ -18252,14 +18252,14 @@
                       "safety": "yolo"
                     },
                     "archivedAt": null,
-                    "bumpedAt": "<time>",
+                    "bumpedAt": "<time:int>",
                     "contextUsage": {
                       "cachedInputTokens": 0,
                       "inputTokens": 0,
                       "outputTokens": 0,
                       "totalTokens": 0
                     },
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "cwd": "<ws>",
                     "harness": "unified",
                     "id": "<id-1>",
@@ -18281,7 +18281,7 @@
                       "outputTokens": 10,
                       "totalTokens": 30
                     },
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "workspaceRoots": [],
                     "worktree": null
                   },
@@ -18292,13 +18292,13 @@
                   },
                   "turns": [
                     {
-                      "completedAt": "<time>",
+                      "completedAt": "<time:int>",
                       "error": null,
                       "id": "<id-2>",
                       "inputEntryId": "user-<id-2>-1",
                       "queueItemId": null,
                       "sessionId": "<id-1>",
-                      "startedAt": "<time>",
+                      "startedAt": "<time:int>",
                       "status": "completed",
                       "stopReason": null
                     }
@@ -18341,7 +18341,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": null,
@@ -18352,7 +18352,7 @@
                     "source": "turn_start",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -18370,7 +18370,7 @@
                     "inputEntryId": "user-<id-6>-5",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -18413,7 +18413,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
                     "inputEntryId": "user-<id-6>-5",
@@ -18424,7 +18424,7 @@
                     "source": "harness",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -18560,13 +18560,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-6>-5",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -18701,7 +18701,7 @@
             "response": {
               "id": 102,
               "result": {
-                "lastEventId": "<nonzero>",
+                "lastEventId": 1,
                 "title": "Mine",
                 "updatedAt": null
               }
@@ -18742,7 +18742,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -18753,7 +18753,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -18771,7 +18771,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -18814,7 +18814,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -18825,7 +18825,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -18956,13 +18956,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -19125,7 +19125,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -19136,7 +19136,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -19154,7 +19154,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -19197,7 +19197,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -19208,7 +19208,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -19339,13 +19339,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -19373,7 +19373,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "cwd": "<root>/checkout",
                       "previousCwd": "<ws>"
@@ -19390,7 +19390,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": null
@@ -19404,7 +19404,7 @@
                   "activeCallbacks": [],
                   "backgroundProcesses": [],
                   "childSessions": [],
-                  "eventId": "<nonzero>",
+                  "eventId": 1,
                   "format": "vibe.public-session-state/v1",
                   "history": [
                     {
@@ -19414,7 +19414,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
                       "inputEntryId": null,
@@ -19425,7 +19425,7 @@
                       "source": "turn_start",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
@@ -19435,7 +19435,7 @@
                           "type": "text"
                         }
                       ],
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
                       "inputEntryId": "user-<id-2>-1",
@@ -19448,11 +19448,11 @@
                       "source": "harness",
                       "turnId": "<id-2>",
                       "type": "message",
-                      "updatedAt": "<time>",
+                      "updatedAt": "<time:int>",
                       "userDisplayContent": null
                     },
                     {
-                      "createdAt": "<time>",
+                      "createdAt": "<time:int>",
                       "details": {
                         "cwd": "<root>/checkout",
                         "previousCwd": "<ws>"
@@ -19469,7 +19469,7 @@
                       "sessionId": "<id-1>",
                       "turnId": null,
                       "type": "checkpoint",
-                      "updatedAt": "<time>"
+                      "updatedAt": "<time:int>"
                     }
                   ],
                   "historyBeforeCursor": null,
@@ -19490,14 +19490,14 @@
                       "safety": "yolo"
                     },
                     "archivedAt": null,
-                    "bumpedAt": "<time>",
+                    "bumpedAt": "<time:int>",
                     "contextUsage": {
                       "cachedInputTokens": 0,
                       "inputTokens": 10,
                       "outputTokens": 5,
                       "totalTokens": 15
                     },
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "cwd": "<root>/checkout",
                     "harness": "unified",
                     "id": "<id-1>",
@@ -19519,7 +19519,7 @@
                       "outputTokens": 5,
                       "totalTokens": 15
                     },
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "workspaceRoots": [],
                     "worktree": null
                   },
@@ -19530,13 +19530,13 @@
                   },
                   "turns": [
                     {
-                      "completedAt": "<time>",
+                      "completedAt": "<time:int>",
                       "error": null,
                       "id": "<id-2>",
                       "inputEntryId": "user-<id-2>-1",
                       "queueItemId": null,
                       "sessionId": "<id-1>",
-                      "startedAt": "<time>",
+                      "startedAt": "<time:int>",
                       "status": "completed",
                       "stopReason": null
                     }
@@ -19575,7 +19575,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
                     "inputEntryId": null,
@@ -19586,7 +19586,7 @@
                     "source": "turn_start",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -19604,7 +19604,7 @@
                     "inputEntryId": "user-<id-6>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -19647,7 +19647,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
                     "inputEntryId": "user-<id-6>-4",
@@ -19658,7 +19658,7 @@
                     "source": "harness",
                     "turnId": "<id-6>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -19779,13 +19779,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-6>",
                     "inputEntryId": "user-<id-6>-4",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -20039,7 +20039,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -20050,7 +20050,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -20068,7 +20068,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -20160,7 +20160,7 @@
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -20196,7 +20196,7 @@
                     "title": "file_system.bash",
                     "turnId": "<id-2>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
@@ -20285,7 +20285,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -20296,7 +20296,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -20422,13 +20422,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }
@@ -20717,7 +20717,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -20728,7 +20728,7 @@
                     "source": "turn_start",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -20746,7 +20746,7 @@
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "in_progress",
                     "stopReason": null
                   }
@@ -20844,7 +20844,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
                     "inputEntryId": "user-<id-2>-1",
@@ -20855,7 +20855,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -20971,7 +20971,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
                     "inputEntryId": "user-<id-2>-1",
@@ -20982,7 +20982,7 @@
                     "source": "harness",
                     "turnId": "<id-2>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   "sessionId": "<id-1>",
@@ -21108,13 +21108,13 @@
                 "params": {
                   "sessionId": "<id-1>",
                   "turn": {
-                    "completedAt": "<time>",
+                    "completedAt": "<time:int>",
                     "error": null,
                     "id": "<id-2>",
                     "inputEntryId": "user-<id-2>-1",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
-                    "startedAt": "<time>",
+                    "startedAt": "<time:int>",
                     "status": "completed",
                     "stopReason": null
                   }

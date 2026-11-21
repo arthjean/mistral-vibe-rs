@@ -3,9 +3,9 @@
 //! answers.
 //!
 //! The lifecycle itself is `vibe_core::worktree::lifecycle`, which speaks
-//! paths. This translates: a `worktree` off the wire becomes a request the core
-//! understands, the directory it resolves to becomes the session's working
-//! directory, and the listing and removal become their wire shapes
+//! paths. This module converts in both directions: a wire `worktree` is turned
+//! into a core request, the directory that request resolves is what the
+//! session runs in, and listings and removals are shaped for the wire
 //! (`vibe/app_server/_worktree_session.py`, `vibe/app_server/_host.py:774-912`).
 
 use std::path::{Path, PathBuf};
@@ -165,8 +165,8 @@ pub(crate) fn moved_roots(cwd: &str, previous: Option<&str>, roots: &[String]) -
 
 /// Why a `worktree` is refused on every call that reopens a recorded session.
 ///
-/// A saved session already has a directory, and honoring one here would move
-/// it out from under a transcript that names the old paths
+/// A saved session already runs in a directory; accepting a new one here would
+/// pull it away from a transcript whose paths point at the old location
 /// (`vibe/app_server/_worktree_session.py:176-189`).
 pub(crate) const REOPEN_REFUSAL: &str =
     "a worktree can be requested only when a session is started, not when one is reopened";
@@ -247,8 +247,8 @@ struct Details {
     changes: Vec<(String, Option<Value>)>,
 }
 
-/// What the listing reports only when a caller renders it: the lines each
-/// branch changed against its merge base, counted in one checkout, and the
+/// What the listing adds only for a caller that displays it: per branch, the
+/// lines changed since its merge base, counted in one checkout, and the
 /// branch the main checkout is on (`vibe/app_server/_host.py:845-882`).
 fn details(cwd: &Path, worktrees: &[LinkedWorktree], managed: &ManagedRoot) -> Details {
     let Ok(checkout) = WorktreeRepository::open(cwd, managed) else {
@@ -291,8 +291,8 @@ pub(crate) struct RemoveRequest<'a> {
 
 /// What `workspace/git/worktrees/remove` answers for `cwd`.
 ///
-/// A kept worktree is a normal outcome the client renders, never a fault, so a
-/// removal that failed answers `kept_error` with the reason. Whether Vibe
+/// A worktree that stays is an ordinary result for the client to display, not
+/// an error, so a failed removal answers `kept_error` with the reason. Whether Vibe
 /// created the branch and how many other sessions hold the worktree are read
 /// before anything is released, so even a kept worktree reports them
 /// (`vibe/app_server/_host.py:961-1018`).
@@ -402,13 +402,13 @@ fn kept_error(error: &WorktreeError) -> Value {
 /// Turns a checkout this host cannot enumerate into an empty listing.
 ///
 /// Neither reason is a client error: a directory outside a repository has no
-/// worktrees, and an app server is expected to run without git at all.
-/// What `workspace/git/checkouts` answers: every repository a project links,
-/// read as git (reference `git_checkouts_response`,
+/// worktrees, and an app server must work on a host lacking git entirely.
+/// What `workspace/git/checkouts` answers: the git view of each repository a
+/// project links (reference `git_checkouts_response`,
 /// `vibe/app_server/_host.py:929-1093`).
 ///
-/// A path git knows nothing about is left out, a repository git cannot read
-/// is answered with the reason, and the repository holding `session_cwd`,
+/// A path unknown to git is omitted, a repository git fails to read comes
+/// back with the reason, and the repository holding `session_cwd`,
 /// the deepest one containing it or one of its checkouts, is marked primary
 /// and probed there rather than at its own root.
 pub(crate) fn checkouts_response(

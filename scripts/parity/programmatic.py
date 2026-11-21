@@ -50,10 +50,12 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -699,7 +701,7 @@ class Normalizer:
         if isinstance(value, list):
             return [self.value(item, key) for item in value]
         if key in TIME_KEYS and isinstance(value, int | float) and not isinstance(value, bool):
-            return "<time>"
+            return blackbox.time_token(value)
         if key in DURATION_KEYS and isinstance(value, int | float) and not isinstance(value, bool):
             return "<duration>"
         if isinstance(value, str):
@@ -866,24 +868,29 @@ def capture(scenario: dict[str, Any], command: list[str], raw: bool) -> dict[str
     captured = run_scenario(scenario, command)
     entry = {"name": scenario["name"], "scenario": scenario, "observed": normalize(scenario, captured)}
     if raw:
-        entry["raw"] = captured["runs"]
+        # The whole capture, so `--renormalize` can normalize it again.
+        entry["raw"] = captured
     return entry
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument("--binary", type=Path, default=None, help="drive this port's `vibe` instead")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--raw", action="store_true")
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize, 'programmatic')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, binary=arguments.binary)
     try:
         if arguments.binary is not None:

@@ -150,9 +150,9 @@ pub async fn refresh_with<T: RegistryTransport + Sync>(
     }
 }
 
-/// Reference `publish_local_pins`: this repository's pins recorded again, so
-/// a pin added or removed mid-session is visible to a sibling repository's
-/// prune before the next sync.
+/// Reference `publish_local_pins`: rewrites this repository's pin record, so a
+/// sibling repository's prune sees pins added or dropped during the session
+/// without waiting for the next sync.
 pub fn publish_local_pins(scope: SyncScope<'_>) {
     record_pins(scope, &ledger::repo_key(scope.roots));
 }

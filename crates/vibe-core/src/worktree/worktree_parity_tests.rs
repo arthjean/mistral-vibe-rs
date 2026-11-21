@@ -13,11 +13,11 @@
 //! corpus is still what the pinned reference answers.
 //!
 //! The surviving divergence is held in [`LEDGER`], one entry per known gap with
-//! the story that closes it. A divergence outside the ledger fails the suite,
-//! and so does a ledger entry whose divergence has been fixed: a ledger that
-//! cannot rot is the only kind worth keeping. EP-086 is instrument-first, so
-//! every entry here is expected to be deleted by a later epic rather than to
-//! live on.
+//! the row that answers for it, and a [`Tally`] accounts for every difference.
+//! A divergence outside the ledger fails the suite, and so does a ledger entry
+//! whose divergence has been fixed: a ledger that cannot rot is the only kind
+//! worth keeping. EP-086 is instrument-first, so every entry here is
+//! expected to be deleted by a later epic rather than to live on.
 //!
 //! # What "hermetic" means on this side
 //!
@@ -43,11 +43,11 @@ use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
-use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{self, ValuedDifference, pinned_reference, valued_differences};
+use crate::parity::replay::{
+    self, PatternDivergence, Tally, ValuedDifference, entries, pinned_reference, valued_differences,
+};
 
 use super::paths::{
     managed_worktree_root, target_cwd, validate_branch_name, validate_worktree_name,
@@ -132,45 +132,14 @@ const DEFAULT_BRANCH: &str = "main";
 const FIXED_AUTHOR: &str = "Parity Oracle";
 const FIXED_EMAIL: &str = "oracle@example.invalid";
 
-/// What a divergence names when no story can close it, because closing it would
-/// mean shipping reference prose.
-const LICENSING: &str = "NOTICE";
-/// What a divergence names when no story is scheduled to close it and the
-/// scorecard's divergence tables record it instead. The audit test holds the
-/// scorecard to naming the entry's `family/case`, so this closer cannot be
-/// claimed without a row a reader can look up.
-const RECORDED: &str = "docs/parity.md";
-const SCORECARD_RELATIVE: &str = "docs/parity.md";
+/// The divergences this port still carries, each scoped to the one case
+/// (`family/case`) it answers for and the row of `docs/parity.md` that does.
+/// A [`Tally`] holds every entry to its count and fails one that stops
+/// reproducing. Keep the list ordered by family then by case.
+const LEDGER: &[PatternDivergence] = &[];
 
-/// One tolerated gap between this port and the reference.
-#[derive(Debug, Clone, Copy)]
-struct Divergence {
-    family: &'static str,
-    /// The one case this entry answers for. Wildcards are refused by the audit
-    /// test: a gap that spans a family spans it one case at a time, and saying
-    /// so is what keeps the ledger from outliving the divergence.
-    case: &'static str,
-    /// Matched against the reported JSON pointer on a segment boundary.
-    pointer: &'static str,
-    /// The story that closes this gap, [`LICENSING`] when none can, or
-    /// [`RECORDED`] when the scorecard records it and no story is scheduled.
-    closed_by: &'static str,
-    /// Why the gap stands, asserted non-empty so an entry cannot be added
-    /// without a stated reason.
-    why: &'static str,
-}
-
-impl Divergence {
-    fn covers(&self, family: &str, case: &str, pointer: &str) -> bool {
-        self.family == family && self.case == case && replay::pointer_within(self.pointer, pointer)
-    }
-}
-
-/// The divergences this port still carries, each with what closes it.
-///
-/// A pointer is matched on segment boundaries, so `/prepared` covers every field under it.
-/// Keep the list ordered by family then by case.
-const LEDGER: &[Divergence] = &[];
+/// The corpus as the manifest lists it.
+const LISTED: &str = "crates/vibe-core/tests/worktree/corpus.json";
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -585,13 +554,7 @@ fn apply_mutation(worktree: &Path, step: &str) {
 // --------------------------------------------------------------------------
 
 fn digest(value: &str) -> String {
-    let hash = Sha256::digest(value.as_bytes());
-    let hex = hash.iter().fold(String::new(), |mut accumulator, byte| {
-        use std::fmt::Write as _;
-        let _ = write!(accumulator, "{byte:02x}");
-        accumulator
-    });
-    format!("sha256:{}", &hex[..32])
+    crate::text::sha256_hex(value.as_bytes())
 }
 
 /// A published sentence, reduced to something `NOTICE` allows shipping.
@@ -599,7 +562,7 @@ fn digest(value: &str) -> String {
 /// The length is counted in characters rather than bytes, because the capture
 /// script counts what `len()` counts on a Python string.
 fn describe(value: &str) -> Value {
-    json!({ "described": digest(value), "length": value.chars().count() })
+    json!({ "prose": value.chars().count(), "sha256": digest(value) })
 }
 
 /// Rewrites one case's absolute paths into the pointers the corpus stores.
@@ -1252,171 +1215,41 @@ fn compare(expected: &Value, actual: &Value) -> Vec<ValuedDifference> {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
-    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/worktree/corpus.json");
+    crate::parity::manifest::assert_corpus(LISTED);
     let corpus = corpus();
     assert_corpus_floor(&corpus);
     if let Some(reason) = skip_reason(&corpus) {
         eprintln!("{reason}");
         return;
     }
+    let raw = fs::read_to_string(replay::repository().join(CORPUS_RELATIVE))
+        .expect("the worktree corpus reads");
     let scratch = tempfile::tempdir().expect("tempdir");
-
-    let mut conforming = 0usize;
-    let mut tolerated: BTreeSet<(String, String)> = BTreeSet::new();
-    let mut unlisted = Vec::new();
-    let mut figures = Figures::default();
+    let mut tally = Tally::new(&raw, entries(LEDGER));
+    assert_eq!(tally.listed(), LISTED);
+    tally.differ(|reference, port| {
+        compare(reference, port)
+            .into_iter()
+            .map(|difference| difference.pointer)
+            .collect()
+    });
     for (index, case) in corpus.cases.iter().enumerate() {
+        let reference = case.document();
         let observed = observed_document(case, scratch.path(), index);
-        let found = compare(&case.document(), &observed);
-        figures.total += 1;
-        if found.is_empty() {
-            conforming += 1;
-            figures.conformant += 1;
-            continue;
-        }
-        // A case is at parity when every difference it holds stands on the
-        // licensing boundary or a decision the scorecard records; an entry a
-        // story closes is an open gap.
-        let mut decided = true;
-        for difference in found {
-            match LEDGER
-                .iter()
-                .find(|entry| entry.covers(&case.family, &case.case, &difference.pointer))
-            {
-                Some(entry) => {
-                    match entry.closed_by {
-                        LICENSING => figures.prose_differences += 1,
-                        RECORDED => figures.accepted_differences += 1,
-                        _ => {
-                            figures.gap_differences += 1;
-                            decided = false;
-                        }
-                    }
-                    tolerated.insert((
-                        format!("{}/{} at {}", entry.family, entry.case, entry.pointer),
-                        entry.closed_by.to_owned(),
-                    ));
-                }
-                None => {
-                    decided = false;
-                    unlisted.push(format!(
-                        "{} at {}: the reference says {}, this port says {}",
-                        case.id(),
-                        difference.pointer,
-                        difference.expected,
-                        difference.actual
-                    ));
-                }
-            }
-        }
-        if decided {
-            figures.accepted += 1;
-        }
+        let found = compare(&reference, &observed)
+            .into_iter()
+            .map(|difference| difference.pointer)
+            .collect();
+        tally.record(&case.id(), &reference, &observed, found);
     }
-
     println!(
-        "worktree: {conforming}/{} cases match the reference at {} across {} families and {} \
-         scripted repositories, {} ledger entries exercised",
+        "worktree: {} cases replayed at {} across {} families and {} scripted repositories",
         corpus.cases.len(),
         &corpus.reference_commit[..12],
         FAMILIES.len(),
         SETUPS.len(),
-        tolerated.len()
     );
-    for (entry, closed_by) in &tolerated {
-        println!("  tolerated {entry} until {closed_by}");
-    }
-
-    assert!(
-        unlisted.is_empty(),
-        "worktree divergences outside the ledger:\n  {}",
-        unlisted.join("\n  ")
-    );
-
-    assert_figures(
-        "worktree parity:",
-        "crates/vibe-core/tests/worktree/corpus.json",
-        figures,
-        serde_json::json!({}),
-    );
-}
-
-#[test]
-fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
-    let corpus = corpus();
-    if let Some(reason) = skip_reason(&corpus) {
-        eprintln!("{reason}");
-        return;
-    }
-    let scratch = tempfile::tempdir().expect("tempdir");
-
-    let mut exercised: BTreeSet<usize> = BTreeSet::new();
-    for (index, case) in corpus.cases.iter().enumerate() {
-        let observed = observed_document(case, scratch.path(), index);
-        for difference in compare(&case.document(), &observed) {
-            if let Some(position) = LEDGER
-                .iter()
-                .position(|entry| entry.covers(&case.family, &case.case, &difference.pointer))
-            {
-                exercised.insert(position);
-            }
-        }
-    }
-
-    let stale = LEDGER
-        .iter()
-        .enumerate()
-        .filter(|(position, _)| !exercised.contains(position))
-        .map(|(_, entry)| {
-            format!(
-                "{}/{} at {} ({})",
-                entry.family, entry.case, entry.pointer, entry.closed_by
-            )
-        })
-        .collect::<Vec<_>>();
-
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer describe a divergence and must be removed, which is what \
-         keeps the ledger from rotting:\n  {}",
-        stale.join("\n  ")
-    );
-}
-
-#[test]
-fn every_ledger_entry_names_what_closes_it() {
-    let scorecard = fs::read_to_string(replay::repository().join(SCORECARD_RELATIVE))
-        .expect("the scorecard is committed");
-    for entry in LEDGER {
-        assert!(
-            entry.closed_by.starts_with("US-")
-                || entry.closed_by == LICENSING
-                || entry.closed_by == RECORDED,
-            "a tolerated divergence names the story that closes it, the licensing boundary that \
-             keeps it open, or the scorecard that records it, not {}",
-            entry.closed_by
-        );
-        if entry.closed_by == RECORDED {
-            let id = format!("`{}/{}`", entry.family, entry.case);
-            assert!(
-                scorecard.contains(&id),
-                "{id} claims `{SCORECARD_RELATIVE}` records it, and the scorecard does not name it"
-            );
-        }
-        assert!(entry.pointer.starts_with('/'), "{}", entry.pointer);
-        assert_ne!(
-            entry.case, "*",
-            "a ledger entry answers for one case, not for every case of {}: a wildcard outlives \
-             the divergence it was written for",
-            entry.family
-        );
-        assert!(
-            FAMILIES.contains(&entry.family),
-            "{} is not a family the corpus drives",
-            entry.family
-        );
-        assert!(!entry.why.is_empty(), "{}/{}", entry.family, entry.case);
-    }
+    tally.conclude("worktree parity:");
 }
 
 #[test]
@@ -1461,11 +1294,8 @@ fn collect_authored(value: &Value, into: &mut BTreeSet<String>) {
 fn collect_literals(value: &Value, authored: &BTreeSet<String>, into: &mut Vec<String>) {
     match value {
         Value::Object(fields) => {
-            // A described sentence is recorded as exactly these two keys.
-            if fields.len() == 2
-                && fields.contains_key("described")
-                && fields.contains_key("length")
-            {
+            // A described sentence is recorded as a prose digest.
+            if replay::is_digest(value) {
                 return;
             }
             fields
@@ -1510,18 +1340,21 @@ fn keeps_literal(text: &str, authored: &BTreeSet<String>) -> bool {
 fn the_projection_agrees_with_the_capture_script() {
     // The two sides must digest identically, or every described string would
     // read as a divergence. Anchored on a value the Python side computes with
-    // `hashlib.sha256(text.encode()).hexdigest()[:32]`.
+    // `hashlib.sha256(text.encode()).hexdigest()`.
     assert_eq!(
         digest("uncommitted changes"),
-        "sha256:31e3e828864d2c00e54f15dcdd17be78"
+        "31e3e828864d2c00e54f15dcdd17be78a191ec3f41d38ebf1ab41c22d01e11af"
     );
     assert_eq!(
         describe("untracked files"),
-        json!({ "described": "sha256:58f592fe9ad4e9071b207336c06ba70c", "length": 15 })
+        json!({
+            "prose": 15,
+            "sha256": "58f592fe9ad4e9071b207336c06ba70caeebe205af516aeece557dad5fce39a7",
+        })
     );
     // A character count, not a byte count: the capture script counts what
     // Python's `len()` counts.
-    assert_eq!(describe("dépôt")["length"], json!(5));
+    assert_eq!(describe("dépôt")["prose"], json!(5));
 
     // The managed-root rule, anchored on the same synthetic path the corpus
     // records, so a change to the digest length or the separator fails here
@@ -1625,13 +1458,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = pinned_reference("worktree") else {
         return;
     };
+    let run = crate::parity::replay::RunDirectory::new("worktree");
     let repository = replay::repository();
-    let recaptured = repository.join("target/worktree-corpus.json");
+    let recaptured = run.join("worktree-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/worktree-full.json"))
+        .arg(run.join("worktree-full.json"))
         .arg("--corpus")
         .arg(&recaptured)
         .current_dir(&repository)

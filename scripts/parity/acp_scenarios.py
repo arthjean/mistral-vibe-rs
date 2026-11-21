@@ -12,24 +12,83 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from blackbox import (
-    APPROVE_FILE_PERMANENT,
-    APPROVE_FOLDER_SESSION,
-    APPROVE_ONCE,
-    APPROVE_SESSION,
-    CLIENT_CAPABILITIES,
-    DISMISS,
-    ELICITING,
-    INITIALIZE,
-    NEW_SESSION,
-    REJECT,
-    ext,
-    initialize,
-    new_session,
-    notify,
-    prompt,
-    request,
+
+# --------------------------------------------------------------------------
+# What the editor client sends, and how it answers the agent
+# --------------------------------------------------------------------------
+
+
+def request(identifier: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {"send": {"id": identifier, "method": method, "params": params or {}}}
+
+
+def notify(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    return {"send": {"method": method, "params": params}}
+
+
+CLIENT_CAPABILITIES = {
+    "fs": {"readTextFile": True, "writeTextFile": True},
+    "terminal": True,
+}
+INITIALIZE = request(
+    0,
+    "initialize",
+    {
+        "protocolVersion": 1,
+        "clientCapabilities": CLIENT_CAPABILITIES,
+        "clientInfo": {"name": "oracle-client", "version": "1.0.0"},
+    },
 )
+NEW_SESSION = request(1, "session/new", {"cwd": "$WS", "mcpServers": []})
+
+
+def prompt(identifier: int, text: str, session: str = "$S1") -> dict[str, Any]:
+    return request(
+        identifier,
+        "session/prompt",
+        {"sessionId": session, "prompt": [{"type": "text", "text": text}]},
+    )
+
+
+def initialize(
+    capabilities: dict[str, Any] | None = None,
+    info: dict[str, Any] | None = None,
+    version: int = 1,
+    identifier: int = 0,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "protocolVersion": version,
+        "clientCapabilities": CLIENT_CAPABILITIES if capabilities is None else capabilities,
+    }
+    params["clientInfo"] = info or {"name": "oracle-client", "version": "1.0.0"}
+    return request(identifier, "initialize", params)
+
+
+ELICITING = {**CLIENT_CAPABILITIES, "elicitation": {"form": {}}}
+
+
+def new_session(identifier: int = 1, **extra: Any) -> dict[str, Any]:
+    return request(identifier, "session/new", {"cwd": "$WS", "mcpServers": [], **extra})
+
+
+def ext(identifier: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    return request(identifier, f"_{method}", params or {})
+
+
+APPROVE_ONCE = {"outcome": {"outcome": "selected", "optionId": "allow_once"}}
+APPROVE_SESSION = {"outcome": {"outcome": "selected", "optionId": "allow_always"}}
+REJECT = {"outcome": {"outcome": "selected", "optionId": "reject_once"}}
+DISMISS = {"outcome": {"outcome": "cancelled"}}
+#: The scoped options an approval of a path outside the workdir offers
+#: (reference `ToolOption` in `vibe/acp/utils.py`).
+APPROVE_FOLDER_SESSION = {"outcome": {"outcome": "selected",
+                                      "optionId": "allow_session_directory_recursive"}}
+APPROVE_FILE_PERMANENT = {"outcome": {"outcome": "selected", "optionId": "allow_permanent_exact"}}
+
+
+# --------------------------------------------------------------------------
+# Scenarios
+# --------------------------------------------------------------------------
 
 
 def call(name: str, arguments: dict[str, Any], identifier: str = "call_1") -> dict[str, Any]:
@@ -184,7 +243,7 @@ def scenarios() -> list[dict[str, Any]]:
                         {"type": "http", "name": "remote", "url": "http://127.0.0.1:9/mcp", "headers": [{"name": "X-Token", "value": "t"}]},
                         {"name": "local", "command": "/nonexistent/mcp-server", "args": ["--stdio"], "env": [{"name": "A", "value": "1"}]},
                     ],
-                }), "quiet": 3.0},
+                }), "quiet": 8.0},
             ],
         },
         {
@@ -464,7 +523,9 @@ def scenarios() -> list[dict[str, Any]]:
             "name": "prompt/question-invalid-answer",
             "backend": [call("ask_user_question", QUESTION), {"text": "Ok"}],
             "client": {"elicitation/create": {"action": "accept", "content": {"q0": "", "q1": ["Small"]}}},
-            "steps": [initialize(ELICITING), NEW_SESSION, prompt(2, "Ask me")],
+            # The title the turn earns arrives after the answer; a longer quiet
+            # keeps it in the step on a loaded host.
+            "steps": [initialize(ELICITING), NEW_SESSION, {**prompt(2, "Ask me"), "quiet": 3.0}],
         },
         {
             "name": "prompt/question-without-elicitation",

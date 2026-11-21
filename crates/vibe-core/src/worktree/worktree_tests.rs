@@ -47,8 +47,8 @@ fn symlink(target: &Path, link: &Path) {
     std::os::windows::fs::symlink_dir(target, link).expect("the fixture symlink is created");
 }
 
-/// The managed root this port reaches for, so a test can assert on what a run
-/// left there.
+/// The managed root this port uses, which lets a test inspect the leftovers of
+/// a run.
 fn managed_directory(vibe_home: &Path, checkout: &Path) -> PathBuf {
     super::paths::managed_worktree_root(vibe_home, checkout, &checkout.join(".git"))
         .expect("the managed root stays under the vibe home")

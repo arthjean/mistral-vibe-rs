@@ -239,7 +239,7 @@ max_lines = 500
 fn migrating_rewrites_the_user_file_once_and_leaves_an_untrusted_project_alone() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(repository.join(".vibe")).expect("project directory");
     fs::create_dir_all(vibe_home(root)).expect("vibe home");
     let user_path = vibe_home(root).join("config.toml");
@@ -281,7 +281,7 @@ fn migrating_rewrites_the_user_file_once_and_leaves_an_untrusted_project_alone()
 fn composing_a_configuration_never_rewrites_a_file() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(repository.join(".vibe")).expect("project directory");
     let project_path = repository.join(".vibe/config.toml");
     let original = "active_model = \"devstral-2\"\n";
@@ -309,7 +309,7 @@ fn composing_a_configuration_never_rewrites_a_file() {
 fn a_trusted_project_file_is_migrated_and_composed() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(repository.join(".vibe")).expect("project directory");
     let project_path = repository.join(".vibe/config.toml");
     fs::write(&project_path, "disabled_tools = [\"read\", \"bash\"]\n").expect("project fixture");
@@ -331,7 +331,7 @@ fn a_trusted_project_file_is_migrated_and_composed() {
 fn a_failed_migration_write_is_reported_and_leaves_the_file_intact() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(repository.join(".vibe")).expect("project directory");
     fs::create_dir_all(vibe_home(root)).expect("vibe home");
     // The blocked file is the project one. `migrate_sources` restores the vibe

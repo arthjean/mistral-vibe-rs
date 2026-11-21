@@ -1,7 +1,7 @@
 {
   "corpus": "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
-  "measuredAgainst": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814",
-  "schemaVersion": 1,
+  "measuredAgainst": "8536a383de647943de8fe75942408fed2b22517b08c7d0a1c424f43b72bc5ff3",
+  "schemaVersion": 2,
   "tallies": {
     "MCP OAuth parity:": {
       "login/already-authorized": {

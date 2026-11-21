@@ -479,8 +479,8 @@ you have not used yet.";
 
 const EDIT_DESCRIPTION: &str = "\
 Replace text in a file. Read the file first: old_string has to match the \
-file exactly, indentation and line endings included, and occur exactly once \
-unless replace_all is true. When an edit is refused, read the file again \
+file exactly, indentation and line endings included, and appear only once \
+in it, unless replace_all is true. When an edit is refused, read the file again \
 before retrying.";
 
 const SKILL_DESCRIPTION: &str = "\

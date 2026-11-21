@@ -1,85 +1,313 @@
 {
   "corpus": "crates/vibe-app-server/tests/teleport-parity/corpus.json",
   "measuredAgainst": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "teleport parity:": {
       "gate/history-without-prompt": {
-        "/code/*": 1,
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/code/*": {
+          "count": 1,
+          "fingerprint": "367aa375b1e45e75",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "fb1228575d610d05",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "5a5b16033aa183da",
+          "level": "exact"
+        }
       },
       "lifecycle/second-start": {
-        "/steps/*/sequence/*/response/error/data": 1,
-        "/steps/*/sequence/*/response/error/message": 1
+        "/steps/*/sequence/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30d689a40f162e2b",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "4bb0f5aaa6566e7d",
+          "level": "exact"
+        }
       },
       "lifecycle/turn-during-teleport": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/error/data": 1,
-        "/steps/*/response/error/message": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/sequence/*/event/operationId": 3,
-        "/steps/*/sequence/*/response/result/operationId": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "a3b70c4cf9d27e74",
+          "level": "exact"
+        },
+        "/steps/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "e3d6535980357ea7",
+          "level": "exact"
+        },
+        "/steps/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "501640531433e990",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "eff311d04e6b2cd3",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/operationId": {
+          "count": 3,
+          "fingerprint": "3420b4fb4bc5c00f",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/result/operationId": {
+          "count": 1,
+          "fingerprint": "a0d981b6bcd20c1f",
+          "level": "exact"
+        }
       },
       "summary/empty-answer": {
-        "/code/*": 1,
-        "/requests/*": 1,
-        "/steps/*/response/result/pickerId": 2,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/error": 1,
-        "/steps/*/sequence/*/event/kind": 2,
-        "/steps/*/sequence/*/event/operationId": 2,
-        "/steps/*/sequence/*/response/result/operationId": 1
+        "/code/*": {
+          "count": 1,
+          "fingerprint": "6398faad0f9a44ef",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/pickerId": {
+          "count": 2,
+          "fingerprint": "282a52f9e86ac9e1",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "1937c00b45d36c46",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/error": {
+          "count": 1,
+          "fingerprint": "24379006156c4708",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 2,
+          "fingerprint": "8a1d91ef32b4907b",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/operationId": {
+          "count": 2,
+          "fingerprint": "071b8251adfbbe92",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/result/operationId": {
+          "count": 1,
+          "fingerprint": "9d92b2c127624935",
+          "level": "exact"
+        }
       },
       "summary/history-with-prompt": {
-        "/code/*/body/context/messageContext": 1,
-        "/requests/*": 1,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/kind": 3,
-        "/steps/*/sequence/*/event/url": 1
+        "/code/*/body/context/messageContext": {
+          "count": 1,
+          "fingerprint": "c3489251ffb679a8",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "8cb121fe04f014e0",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 3,
+          "fingerprint": "90deb0fe10ef922e",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/url": {
+          "count": 1,
+          "fingerprint": "f9b55f7551898539",
+          "level": "exact"
+        }
       },
       "summary/history-without-prompt": {
-        "/code/*": 1,
-        "/requests/*": 1,
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/pickerId": 1,
-        "/steps/*/sequence/*": 4,
-        "/steps/*/sequence/*/response/error": 1,
-        "/steps/*/sequence/*/response/result": 1
+        "/code/*": {
+          "count": 1,
+          "fingerprint": "d2fb6f871b8d0aab",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "f80b2729f8375bf3",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "3e504dcd1876de8e",
+          "level": "exact"
+        },
+        "/steps/*/response/result/pickerId": {
+          "count": 1,
+          "fingerprint": "f84c9c5bc3fddf8f",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 4,
+          "fingerprint": "7749ee8ca4481cf2",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/error": {
+          "count": 1,
+          "fingerprint": "581a8025326af829",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/result": {
+          "count": 1,
+          "fingerprint": "1363e99ef94049a1",
+          "level": "exact"
+        }
       },
       "summary/model-failure": {
-        "/code/*": 1,
-        "/requests/*": 1,
-        "/steps/*/response/result/pickerId": 2,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/error": 1,
-        "/steps/*/sequence/*/event/kind": 2,
-        "/steps/*/sequence/*/event/operationId": 2,
-        "/steps/*/sequence/*/response/result/operationId": 1
+        "/code/*": {
+          "count": 1,
+          "fingerprint": "6398faad0f9a44ef",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/pickerId": {
+          "count": 2,
+          "fingerprint": "282a52f9e86ac9e1",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "1937c00b45d36c46",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/error": {
+          "count": 1,
+          "fingerprint": "24379006156c4708",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 2,
+          "fingerprint": "8a1d91ef32b4907b",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/operationId": {
+          "count": 2,
+          "fingerprint": "071b8251adfbbe92",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/response/result/operationId": {
+          "count": 1,
+          "fingerprint": "9d92b2c127624935",
+          "level": "exact"
+        }
       },
       "summary/plain-answer": {
-        "/code/*/body/context/messageContext": 1,
-        "/requests/*": 1,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/kind": 3,
-        "/steps/*/sequence/*/event/url": 1
+        "/code/*/body/context/messageContext": {
+          "count": 1,
+          "fingerprint": "c3489251ffb679a8",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "8cb121fe04f014e0",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 3,
+          "fingerprint": "90deb0fe10ef922e",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/url": {
+          "count": 1,
+          "fingerprint": "f9b55f7551898539",
+          "level": "exact"
+        }
       },
       "summary/too-long": {
-        "/requests/*": 1,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/kind": 3,
-        "/steps/*/sequence/*/event/url": 1
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "8cb121fe04f014e0",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 3,
+          "fingerprint": "90deb0fe10ef922e",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/url": {
+          "count": 1,
+          "fingerprint": "f9b55f7551898539",
+          "level": "exact"
+        }
       },
       "telemetry/summary": {
-        "/code/*/body/context/messageContext": 1,
-        "/requests/*": 1,
-        "/steps/*/sequence/*": 1,
-        "/steps/*/sequence/*/event/kind": 3,
-        "/steps/*/sequence/*/event/url": 1,
-        "/telemetry/*/properties/context_summary": 1,
-        "/telemetry/*/properties/context_summary_chars": 1,
-        "/telemetry/*/properties/nb_session_messages": 1
+        "/code/*/body/context/messageContext": {
+          "count": 1,
+          "fingerprint": "c3489251ffb679a8",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*": {
+          "count": 1,
+          "fingerprint": "8cb121fe04f014e0",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/kind": {
+          "count": 3,
+          "fingerprint": "90deb0fe10ef922e",
+          "level": "exact"
+        },
+        "/steps/*/sequence/*/event/url": {
+          "count": 1,
+          "fingerprint": "f9b55f7551898539",
+          "level": "exact"
+        },
+        "/telemetry/*/properties/context_summary": {
+          "count": 1,
+          "fingerprint": "3139a527305e6e9c",
+          "level": "exact"
+        },
+        "/telemetry/*/properties/context_summary_chars": {
+          "count": 1,
+          "fingerprint": "daec968e6feeafd4",
+          "level": "exact"
+        },
+        "/telemetry/*/properties/nb_session_messages": {
+          "count": 1,
+          "fingerprint": "fd5139947006cc58",
+          "level": "exact"
+        }
       }
     }
   }

@@ -1,228 +1,732 @@
 {
   "corpus": "crates/vibe-cli/tests/system-prompt-parity/corpus.json",
   "measuredAgainst": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "system prompt parity:": {
       "compose/add-dir": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/add-dir-contains-cwd": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/add-dir-is-cwd": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/add-dir-untrusted-cwd": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "d611b218f75522c2",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/blank-agents": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 5,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "ab9f3982c822488b",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 5,
+          "fingerprint": "2cce8dcb5524898b",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/commit-count-one": {
-        "/requests/*/carries/*/data": 3,
-        "/requests/*/carries/*/occurrences": 2
+        "/requests/*/carries/*/data": {
+          "count": 3,
+          "fingerprint": "bd5c97cd5c488f05",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 2,
+          "fingerprint": "67d6159509ff37cb",
+          "level": "exact"
+        }
       },
       "compose/commit-count-zero": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 5
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "ab9f3982c822488b",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 5,
+          "fingerprint": "5e15f7288dedf186",
+          "level": "exact"
+        }
       },
       "compose/cwd-is-documents": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 2
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "3fd780d903ba8269",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 2,
+          "fingerprint": "3a0e7958d508fe65",
+          "level": "exact"
+        }
       },
       "compose/cwd-is-home": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 2
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "3fd780d903ba8269",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 2,
+          "fingerprint": "3a0e7958d508fe65",
+          "level": "exact"
+        }
       },
       "compose/default": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/detached-head": {
-        "/requests/*/carries/*": 2,
-        "/requests/*/carries/*/data": 6
+        "/requests/*/carries/*": {
+          "count": 2,
+          "fingerprint": "666388c8e41b8674",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        }
       },
       "compose/nested-agents-below-cwd": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/no-project-context": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "222289371494e1c3",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 1,
+          "fingerprint": "47d2561fd5b40b39",
+          "level": "exact"
+        }
       },
       "compose/no-prompt-detail": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/no-signature-no-model": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/not-a-repository": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 4
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "13f3401260c49cc8",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 4,
+          "fingerprint": "8569d0facf8d3f16",
+          "level": "exact"
+        }
       },
       "compose/project-agents-only": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "d611b218f75522c2",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "8ddb1252104279c6",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/project-skill": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-bundled-utility": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-explore": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-file-overrides-builtin": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-lean": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-minimal": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-project-file": {
-        "/exit": 1,
-        "/requests/*": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "f992f67da70ee715",
+          "level": "exact"
+        },
+        "/requests/*": {
+          "count": 1,
+          "fingerprint": "f8b99db3aa9188b5",
+          "level": "exact"
+        }
       },
       "compose/prompt-project-file-untrusted": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "d611b218f75522c2",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-project-over-user": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-suffix-replaced": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-tests": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-upper-case": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-user-file": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-v2": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/prompt-v3": {
-        "/requests/*/carries/*/data": 1,
-        "/requests/*/carries/*/occurrences": 2
+        "/requests/*/carries/*/data": {
+          "count": 1,
+          "fingerprint": "f5428ad5a0538383",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 2,
+          "fingerprint": "66e30aaa285427c8",
+          "level": "exact"
+        }
       },
       "compose/repository-without-commits": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 4
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "13f3401260c49cc8",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 4,
+          "fingerprint": "8569d0facf8d3f16",
+          "level": "exact"
+        }
       },
       "compose/sections-off": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "222289371494e1c3",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 1,
+          "fingerprint": "47d2561fd5b40b39",
+          "level": "exact"
+        }
       },
       "compose/shell-unset": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/skills-none": {
-        "/requests/*/carries/*": 2,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 2,
+          "fingerprint": "e00e28361f8a8bd0",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/skills-only-model-invocable": {
-        "/requests/*/carries/*": 2,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 2,
+          "fingerprint": "e00e28361f8a8bd0",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/skills-only-user-invocable": {
-        "/requests/*/carries/*": 2,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 2,
+          "fingerprint": "e00e28361f8a8bd0",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/skills-user-and-model-only": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/subagent-custom": {
-        "/exit": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "f992f67da70ee715",
+          "level": "exact"
+        }
       },
       "compose/subagent-explore": {
-        "/exit": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "f992f67da70ee715",
+          "level": "exact"
+        }
       },
       "compose/subagents-none": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "9672012130f67a5b",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/trust-root-above": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/untrusted": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "d611b218f75522c2",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "compose/user-agents-only": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 6,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "d611b218f75522c2",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 6,
+          "fingerprint": "2852a54b971828aa",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "live/programmatic": {
-        "/requests/*/carries/*": 1,
-        "/requests/*/carries/*/data": 7,
-        "/requests/*/carries/*/occurrences": 1
+        "/requests/*/carries/*": {
+          "count": 1,
+          "fingerprint": "498fd592e9470e7d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 7,
+          "fingerprint": "fdbcfe0048794f53",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 1,
+          "fingerprint": "cc37e0bdbb4ab224",
+          "level": "exact"
+        }
       },
       "live/subagent": {
-        "/requests/*/carries/*": 2,
-        "/requests/*/carries/*/data": 14,
-        "/requests/*/carries/*/occurrences": 2
+        "/requests/*/carries/*": {
+          "count": 2,
+          "fingerprint": "f373cae672623f96",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/data": {
+          "count": 14,
+          "fingerprint": "67314009054ba06d",
+          "level": "exact"
+        },
+        "/requests/*/carries/*/occurrences": {
+          "count": 2,
+          "fingerprint": "8a42203540fc5fe8",
+          "level": "exact"
+        }
       }
     }
   }

@@ -1,7 +1,7 @@
 {
   "corpus": "crates/vibe-core/tests/config-surface/corpus.json",
   "measuredAgainst": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "config MCP entries parity:": {
       "explicit-header-wins-over-token": {

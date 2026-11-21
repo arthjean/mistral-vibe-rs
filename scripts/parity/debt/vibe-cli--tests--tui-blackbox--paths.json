@@ -1,34 +1,112 @@
 {
   "corpus": "crates/vibe-cli/tests/tui-blackbox/paths.json",
-  "measuredAgainst": "76e1a4dd6815cdb70fd68c7196c6cae3de05f9d24ec5a5513e3a748504167d19",
-  "schemaVersion": 1,
+  "measuredAgainst": "b2c07de8be54fa4903baeaef1325dc686b08aa34a4746fc992f3158d7acfbb12",
+  "schemaVersion": 2,
   "tallies": {
     "tui paths parity:": {
       "paths/fuzzy": {
-        "/snapshots/*/screen/attributes/*": 15,
-        "/snapshots/*/screen/attributes/*/row": 11,
-        "/snapshots/*/screen/attributes/*/runs/*": 6,
-        "/snapshots/*/screen/attributes/*/runs/*/*": 25,
-        "/snapshots/*/screen/cursor/col": 2,
-        "/snapshots/*/screen/cursor/row": 2,
-        "/snapshots/*/screen/cursor/visible": 2,
-        "/snapshots/*/screen/rows/*/length": 16,
-        "/snapshots/*/screen/rows/*/sha256": 18,
-        "/snapshots/*/screen/rows/*/text": 23,
-        "/snapshots/*/screen/titles/*": 4
+        "/snapshots/*/screen/attributes/*": {
+          "count": 15,
+          "fingerprint": "04b32d48c7dcf770",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/row": {
+          "count": 11,
+          "fingerprint": "e0136916b7207929",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/runs/*": {
+          "count": 6,
+          "fingerprint": "a4a836cc36a09453",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/runs/*/*": {
+          "count": 25,
+          "fingerprint": "a0b5f9cb56dc4f3e",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/col": {
+          "count": 2,
+          "fingerprint": "232208dc4dd63265",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/row": {
+          "count": 2,
+          "fingerprint": "c63b667419ac5bc7",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/visible": {
+          "count": 2,
+          "fingerprint": "581a240861ad7630",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/rows/*": {
+          "count": 18,
+          "fingerprint": "c64283c5506e3688",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/rows/*/text": {
+          "count": 9,
+          "fingerprint": "efbce6cbed865de7",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/titles/*": {
+          "count": 4,
+          "fingerprint": "5ab830c4ac691971",
+          "level": "exact"
+        }
       },
       "paths/popup": {
-        "/snapshots/*/screen/attributes/*": 19,
-        "/snapshots/*/screen/attributes/*/row": 19,
-        "/snapshots/*/screen/attributes/*/runs/*": 13,
-        "/snapshots/*/screen/attributes/*/runs/*/*": 47,
-        "/snapshots/*/screen/cursor/col": 3,
-        "/snapshots/*/screen/cursor/row": 3,
-        "/snapshots/*/screen/cursor/visible": 3,
-        "/snapshots/*/screen/rows/*/length": 24,
-        "/snapshots/*/screen/rows/*/sha256": 27,
-        "/snapshots/*/screen/rows/*/text": 30,
-        "/snapshots/*/screen/titles/*": 6
+        "/snapshots/*/screen/attributes/*": {
+          "count": 19,
+          "fingerprint": "79738e313090376b",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/row": {
+          "count": 19,
+          "fingerprint": "e7713f901cf7da23",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/runs/*": {
+          "count": 13,
+          "fingerprint": "21a71a1f0cca860d",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/attributes/*/runs/*/*": {
+          "count": 47,
+          "fingerprint": "6a3447da000ac71a",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/col": {
+          "count": 3,
+          "fingerprint": "313388535f1c45c2",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/row": {
+          "count": 3,
+          "fingerprint": "c11c2027aa16ff02",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/cursor/visible": {
+          "count": 3,
+          "fingerprint": "4c74117dc7191b0e",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/rows/*": {
+          "count": 27,
+          "fingerprint": "0725b3859aa52f55",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/rows/*/text": {
+          "count": 9,
+          "fingerprint": "febc32f576dd2802",
+          "level": "exact"
+        },
+        "/snapshots/*/screen/titles/*": {
+          "count": 6,
+          "fingerprint": "f1592db471497307",
+          "level": "exact"
+        }
       }
     }
   }

@@ -169,7 +169,7 @@ fn corpus() -> Corpus {
 fn servers(document: &str) -> Result<Vec<McpServerConfig>, ConfigError> {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let project = temporary.path().join("project");
+    let project = temporary.path().join("home/project");
     fs::create_dir_all(&home).expect("home directory");
     fs::create_dir_all(&project).expect("project directory");
     fs::write(home.join("config.toml"), document).expect("user fixture");

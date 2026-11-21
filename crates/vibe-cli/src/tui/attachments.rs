@@ -297,7 +297,7 @@ pub enum SubmissionError {
     #[error("workspace is unavailable: {0}")]
     Workspace(String),
     #[error(
-        "Model `{model}` does not support images. Switch with /model or remove the attachment."
+        "Model `{model}` cannot read images. Pick another one with /model, or drop the attachment."
     )]
     ImagesUnsupported { model: String },
     #[error("Too many image attachments (got {actual}, max {maximum}).")]

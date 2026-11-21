@@ -339,7 +339,7 @@ impl LayeredConfig {
         let requested_name = request.name.map(mcp::normalize_mcp_server_name);
         if requested_name.as_deref() == Some("") {
             return Err(ConfigError::InvalidMcp(
-                "MCP server name must contain letters or numbers".to_owned(),
+                "MCP server name needs at least one letter or digit".to_owned(),
             ));
         }
         let snapshot = self.load()?;
@@ -351,7 +351,7 @@ impl LayeredConfig {
         }) {
             if !matches!(existing.auth, McpAuthConfig::Oauth(_)) {
                 return Err(ConfigError::InvalidMcp(format!(
-                    "MCP server URL is already configured as `{}`, which authenticates \
+                    "the MCP server `{}` already uses this URL and authenticates \
                      statically; only OAuth servers can be added here",
                     existing.alias
                 )));
@@ -361,7 +361,7 @@ impl LayeredConfig {
                 .is_some_and(|requested| requested != existing.alias)
             {
                 return Err(ConfigError::InvalidMcp(format!(
-                    "MCP server URL is already configured as `{}`",
+                    "the MCP server `{}` already uses this URL",
                     existing.alias
                 )));
             }
@@ -538,7 +538,7 @@ impl LayeredConfig {
         let name = mcp::normalize_mcp_server_name(name);
         if name.is_empty() {
             return Err(ConfigError::InvalidMcp(
-                "MCP server name must contain letters or numbers".to_owned(),
+                "MCP server name needs at least one letter or digit".to_owned(),
             ));
         }
         let snapshot = self.load()?;

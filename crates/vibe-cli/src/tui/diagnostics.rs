@@ -82,9 +82,9 @@ pub struct ClassifiedError {
     pub message: String,
 }
 
-const RATE_LIMIT_MESSAGE: &str = "Rate limits exceeded. Please wait a moment before trying again.";
-const RATE_LIMIT_UPGRADE_MESSAGE: &str = "Rate limits exceeded. Please wait a moment before trying \
-     again, or upgrade to Pro for higher rate limits and uninterrupted access.";
+const RATE_LIMIT_MESSAGE: &str = "Rate limit reached. Wait a moment, then send the request again.";
+const RATE_LIMIT_UPGRADE_MESSAGE: &str = "Rate limit reached. Wait a moment, then send the request \
+     again, or move to Pro for higher limits and access without interruption.";
 const CONTEXT_TOO_LONG_MESSAGE: &str = "The conversation context exceeds the model's maximum \
      limit. The last messages and output of agent actions went above the allowed \
      size.\n\nTo recover:\n1. Use /rewind to undo recent messages and tool outputs\n2. Then use \
@@ -94,8 +94,8 @@ const CONTEXT_TOO_LONG_MESSAGE: &str = "The conversation context exceeds the mod
 pub const RETRY_HINT: &str =
     "\n\nRun /retry [additional instructions] to continue the interrupted response.";
 const REFUSAL_LEAD: &str = "The model declined to respond and stopped early (refusal).";
-const REFUSAL_FALLBACK: &str = "This can happen with certain prompts or content. Try rephrasing \
-     your request or starting a new conversation.";
+const REFUSAL_FALLBACK: &str = "Some prompts or content can cause this. Reword the request, \
+     or open a new conversation in place of this one.";
 
 /// Classifies a turn or tool failure and resolves the reference message. The
 /// raw payload never reaches the message: only the reference-shaped category

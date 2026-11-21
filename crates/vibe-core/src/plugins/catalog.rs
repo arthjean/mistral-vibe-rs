@@ -40,7 +40,8 @@ pub enum PluginMcpDiscoveryFailure {
 pub type DiscoveryFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<RemoteTool>, PluginMcpDiscoveryFailure>> + Send + 'a>>;
 
-/// Connects one plugin-owned MCP server and reports its tools. Reference
+/// Opens a connection to a single MCP server a plugin ships and lists the
+/// tools it exposes. Reference
 /// `PluginMCPDiscovery`.
 pub trait PluginMcpDiscovery: Send + Sync {
     fn discover<'a>(&'a self, definition: &'a PluginMcpServerDefinition) -> DiscoveryFuture<'a>;

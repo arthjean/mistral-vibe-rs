@@ -1,10 +1,11 @@
-//! Identifier-safe names for the tool groups a plugin's sources produce.
+//! Names fit for identifiers, given to the tool groups that a plugin's sources
+//! yield.
 //!
-//! Reference `vibe/core/plugins/_naming.py`. A group name is digested into the
-//! snapshot, so it has to come out the same on every host: names are assigned
-//! from the whole set of identities at once, ordered by their raw identity, and
-//! a contested base name takes a suffix from a digest of its own identity,
-//! growing from eight hex characters until it is free.
+//! Reference `vibe/core/plugins/_naming.py`. The snapshot digest includes each
+//! group name, which must therefore be identical across hosts: every identity
+//! is named in one pass, sorted by raw identity, and when two want the same base
+//! name, each gets a suffix taken from a hash of its identity, starting at eight
+//! hex characters and lengthened until no clash remains.
 
 use std::collections::{BTreeMap, BTreeSet};
 

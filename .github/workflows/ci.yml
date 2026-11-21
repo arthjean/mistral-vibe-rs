@@ -49,6 +49,17 @@ jobs:
       # Rust meta-test checks the same rules inside `cargo test`.
       - name: Parity manifest
         run: python3 scripts/parity/repin.py verify
+      # The parity scripts are linted and type-checked under the configuration
+      # `scripts/parity/pyproject.toml` commits, at the versions
+      # `scripts/parity/lint-requirements.txt` pins (this file carries no
+      # version literal); ruff refuses any other through its
+      # `required-version`. Their import rules run inside `cargo test`.
+      - name: Parity scripts lint and types
+        working-directory: scripts/parity
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet --requirement lint-requirements.txt
+          ruff check .
+          mypy
       # The AGENTS.md gate: no `FORCE_COLOR`, a throwaway vibe home, and every
       # test run to the end so one failure does not hide the next.
       - name: Quality gates

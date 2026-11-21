@@ -122,9 +122,9 @@ pub enum ConfigError {
     /// An allowlist the organization's managed layer enforces admits none of
     /// the configured models. Reference `validate_merged`, which fails closed
     /// rather than letting a model the operator configured run.
-    #[error("the enforced `allowed_models` matches none of the configured models")]
+    #[error("no configured model fits the enforced `allowed_models`")]
     AdminAllowlistMatchesNothing,
-    #[error("vision model `{alias}` must set `supports_images = true`")]
+    #[error("vision model `{alias}` needs `supports_images = true`")]
     VisionModelCannotSee { alias: String },
     #[error(
         "vision model `{alias}` names provider `{provider}`, which is not configured under `[[providers]]`"

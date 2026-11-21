@@ -40,8 +40,7 @@ pub const DEFAULT_BROWSER_AUTH_API_BASE_URL: &str = "https://console.mistral.ai/
 /// Mirrors the reference provider model: an explicit value wins, and only the
 /// mistral provider (backend `mistral`, or no backend recorded on a provider
 /// named `mistral`) falls back to the shipped defaults. `None` when either
-/// base is absent or empty, in which case browser sign-in is not available
-/// for the entry.
+/// base is absent or empty, meaning this entry offers no browser sign-in.
 ///
 /// The availability gate is the reference's own `supports_browser_sign_in`:
 /// an entry that is neither the mistral backend nor named `mistral` has no

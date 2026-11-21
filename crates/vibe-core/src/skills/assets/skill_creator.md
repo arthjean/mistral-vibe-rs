@@ -1,6 +1,6 @@
 # Skill Creator
 
-Load this skill before creating, updating or deleting a Vibe skill.
+Load this skill first whenever a Vibe skill is to be created, changed or removed.
 
 ## Gather requirements one question at a time
 
@@ -84,7 +84,7 @@ directory, referenced by relative path so the model reads them on demand.
 
 Create the directory and its `SKILL.md` together; update by editing in place
 with the smallest diff that serves the request; delete by removing the whole
-directory rather than the file alone. Writing under a skills directory goes
-through the ordinary file-tool permission prompts, so the user approves each
-write the same way they approve any other edit. Afterward, point out that
+directory rather than the file alone. Files under a skills directory are
+written with the usual file tools and their usual permission prompts, so each
+write is approved like any other edit. Afterward, point out that
 `/reload` picks the change up without a restart.

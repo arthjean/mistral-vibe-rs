@@ -262,7 +262,8 @@ fn route_sort_key(route: &PluginToolRouteSnapshot) -> [&str; 5] {
     ]
 }
 
-/// Every component, and every path it points at, names a listed plugin.
+/// Checks that each component, along with each path it refers to, belongs to a
+/// plugin the snapshot lists.
 /// Reference `validate_resolved_plugin_snapshot`.
 ///
 /// # Errors

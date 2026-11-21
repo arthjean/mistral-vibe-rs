@@ -6,12 +6,16 @@
 //! any more, which is exactly the state the table exists to prevent, so this
 //! module reads the table and resolves every pointer it names: a repository
 //! path has to exist, and a symbol, ledger key or test name has to still
-//! appear in the sources.
+//! appear in the sources. A symbol a row places in a file, as `` `symbol` in
+//! `path` `` or a list such as `` `a`, `b` and `c` in `path` ``, has to appear
+//! in that file (or under that directory), not merely somewhere: a symbol that
+//! moved to another module leaves the row pointing a reader at a file that no
+//! longer holds it.
 //!
 //! Reference paths are skipped: the checkout is optional here, and a missing
 //! checkout must never fail `cargo test`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -27,6 +31,12 @@ const SCANNED_EXTENSIONS: [&str; 4] = ["rs", "py", "json", "toml"];
 const PATH_PREFIXES: [&str; 3] = ["crates/", "scripts/", "docs/"];
 /// Root files the table names directly.
 const ROOT_FILES: [&str; 2] = ["CHANGELOG.md", "NOTICE"];
+
+/// The text between two backticked symbols that keeps them in one list, so
+/// that a placement after the last one places every symbol of the list.
+const LIST_SEPARATORS: [&str; 5] = [", ", " and ", ", and ", " or ", ", or "];
+/// The text between a symbol and the repository path that places it there.
+const PLACED_IN: &str = " in ";
 
 /// A segment shorter than this is too generic to resolve, so it is not
 /// required to appear anywhere.
@@ -98,6 +108,41 @@ fn backticked(cell: &str) -> Vec<String> {
         .collect()
 }
 
+/// Every `(symbol, path)` a cell places: a backticked symbol, or a list of
+/// them joined by [`LIST_SEPARATORS`], followed by exactly [`PLACED_IN`] and a
+/// backticked repository path. A symbol followed by anything else (`beside
+/// it`, `entries in`, `and by`) is placed nowhere and only has to resolve in
+/// the vocabulary.
+fn placements(cell: &str) -> Vec<(String, String)> {
+    let parts: Vec<&str> = cell.split('`').collect();
+    let mut placed = Vec::new();
+    let mut list: Vec<String> = Vec::new();
+    for index in (1..parts.len()).step_by(2) {
+        // An unclosed backtick leaves a trailing span that is not a token.
+        if index + 1 >= parts.len() {
+            break;
+        }
+        let token = parts[index].trim();
+        let before = parts[index - 1];
+        if let Some(path) = repository_path(token) {
+            if before == PLACED_IN {
+                placed.extend(list.drain(..).map(|symbol| (symbol, path.clone())));
+            }
+            list.clear();
+            continue;
+        }
+        if token.is_empty() || token.starts_with("vibe/") || token.starts_with('/') {
+            list.clear();
+            continue;
+        }
+        if list.is_empty() || !LIST_SEPARATORS.contains(&before) {
+            list.clear();
+        }
+        list.push(token.to_owned());
+    }
+    placed
+}
+
 /// Whether a token names a file in this repository rather than a symbol.
 fn repository_path(token: &str) -> Option<String> {
     let path = token.split(':').next().unwrap_or(token).trim();
@@ -154,20 +199,39 @@ fn scanned_sources(root: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// Adds every identifier-shaped word of `contents` to `words`.
+fn collect_words(contents: &str, words: &mut BTreeSet<String>) {
+    for word in contents.split(|character: char| !character.is_alphanumeric() && character != '_') {
+        if word.len() >= MINIMUM_SEGMENT {
+            words.insert(word.to_owned());
+        }
+    }
+}
+
 /// Every identifier-shaped word the sources contain, which is what a ledger
 /// pointer has to resolve against.
 fn source_vocabulary(root: &Path) -> BTreeSet<String> {
     let mut words = BTreeSet::new();
     for path in scanned_sources(root) {
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        for word in
-            contents.split(|character: char| !character.is_alphanumeric() && character != '_')
-        {
-            if word.len() >= MINIMUM_SEGMENT {
-                words.insert(word.to_owned());
+        if let Ok(contents) = fs::read_to_string(&path) {
+            collect_words(&contents, &mut words);
+        }
+    }
+    words
+}
+
+/// Every identifier-shaped word of the file at `path`, or of every file under
+/// it when it is a directory, whatever its extension.
+fn file_vocabulary(path: &Path) -> BTreeSet<String> {
+    let mut words = BTreeSet::new();
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        if next.is_dir() {
+            if let Ok(entries) = fs::read_dir(&next) {
+                pending.extend(entries.flatten().map(|entry| entry.path()));
             }
+        } else if let Ok(contents) = fs::read_to_string(&next) {
+            collect_words(&contents, &mut words);
         }
     }
     words
@@ -189,7 +253,31 @@ fn resolve(rows: &[(String, String)], root: &Path, vocabulary: &BTreeSet<String>
         unresolved,
         unevidenced,
     } = &mut findings;
+    let mut files: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (part, evidence) in rows {
+        for (symbol, path) in placements(evidence) {
+            let full = root.join(&path);
+            // A path that does not exist, or a symbol no source carries, is
+            // reported once, below.
+            let known = segments(&symbol)
+                .iter()
+                .all(|segment| vocabulary.contains(segment));
+            if !full.exists() || !known {
+                continue;
+            }
+            let words = files
+                .entry(path.clone())
+                .or_insert_with(|| file_vocabulary(&full));
+            let absent = segments(&symbol)
+                .into_iter()
+                .filter(|segment| !words.contains(segment))
+                .collect::<Vec<_>>();
+            if !absent.is_empty() {
+                unresolved.push(format!(
+                    "{part}: `{symbol}` is cited in `{path}`, which does not carry {absent:?}"
+                ));
+            }
+        }
         let mut checked = 0usize;
         for token in backticked(evidence) {
             // The reference checkout is optional on this machine, so a
@@ -278,6 +366,8 @@ fn a_row_whose_evidence_disappeared_is_reported() {
     // Composed rather than written whole, so this test's own source does not
     // put the symbol it claims is missing into the scanned vocabulary.
     let removed = format!("Removed{}Workspace", "FromThe");
+    // `extract_summary` lives in the compaction module, so the vocabulary
+    // holds it while the pin's module does not.
     let document = format!(
         "\
 ## Accepted divergences
@@ -288,10 +378,12 @@ fn a_row_whose_evidence_disappeared_is_reported() {
 | A deleted symbol | reason | `{removed}` in `crates/vibe-core/src/parity.rs` |
 | A row with no artifact | reason | nothing anyone can open |
 | A living row | reason | `REFERENCE_COMMIT` in `crates/vibe-core/src/parity.rs` |
+| A symbol cited in the wrong file | reason | `REFERENCE_COMMIT` and `extract_summary` in `crates/vibe-core/src/parity.rs` |
+| A symbol in a cited directory | reason | `extract_summary` in `crates/vibe-core/src/compaction/` |
 "
     );
     let rows = ledger_rows(&document);
-    assert_eq!(rows.len(), 4);
+    assert_eq!(rows.len(), 6);
     let findings = resolve(&rows, &root, &vocabulary);
     assert_eq!(
         findings
@@ -299,7 +391,36 @@ fn a_row_whose_evidence_disappeared_is_reported() {
             .iter()
             .map(|line| line.split(':').next().unwrap_or_default())
             .collect::<Vec<_>>(),
-        ["A deleted file", "A deleted symbol"]
+        [
+            "A deleted file",
+            "A deleted symbol",
+            "A symbol cited in the wrong file"
+        ]
+    );
+    assert!(
+        findings.unresolved[2].contains("`extract_summary` is cited in"),
+        "only the misplaced symbol of the list is reported: {:?}",
+        findings.unresolved
     );
     assert_eq!(findings.unevidenced, ["A row with no artifact".to_owned()]);
+}
+
+/// A placement binds the symbols of one list to the path after `in`, and only
+/// those: a symbol separated from it by other words, or from the list by a
+/// clause, is placed nowhere.
+#[test]
+fn a_placement_binds_the_list_right_before_in_and_a_path() {
+    let cell = "`A::one` and `two` in `crates/x.rs`, asserted by `three` and by `four` in \
+                `crates/y.rs:12`, `five` beside it, the `six` entries in `SEVEN` in \
+                `scripts/z.py`, `crates/w.rs` with `eight`, `vibe/core/x.py` in `crates/v.rs`";
+    assert_eq!(
+        placements(cell),
+        [
+            ("A::one", "crates/x.rs"),
+            ("two", "crates/x.rs"),
+            ("four", "crates/y.rs"),
+            ("SEVEN", "scripts/z.py"),
+        ]
+        .map(|(symbol, path)| (symbol.to_owned(), path.to_owned()))
+    );
 }

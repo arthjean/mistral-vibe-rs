@@ -135,11 +135,10 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "voiceManager/listener/no-audio",
-        "ACCEPTED: the reference's no-audio error joins its two clauses with an em dash \
-         (`_no_audio_detected_message`, `vibe/cli/voice_manager/voice_manager.py`); this \
-         repository's writing rules forbid that glyph in any output, so \
-         `crate::manager::no_audio_detected_message` joins them with a semicolon, one code \
-         point shorter, which the prose digest reports",
+        "ACCEPTED: the reference's no-audio error (`_no_audio_detected_message`, \
+         `vibe/cli/voice_manager/voice_manager.py`) is authored prose NOTICE keeps out, so \
+         `crate::manager::no_audio_detected_message` names the same cause and next step in this \
+         port's own words, which the prose digest reports",
     ),
     (
         "voiceManager/telemetry/no-audio",
@@ -572,7 +571,7 @@ impl Loaded {
         let snapshot = LayeredConfig::new(
             ConfigPaths {
                 vibe_home: home,
-                working_directory: enclosure.path().join("project"),
+                working_directory: enclosure.path().join("home/project"),
             },
             default_document(),
         )
@@ -1647,14 +1646,15 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = pinned_reference("voice") else {
         return;
     };
+    let run = vibe_core::parity::replay::RunDirectory::new("voice");
     let repository = repo_root();
     let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/voice-corpus.json");
+    let recaptured = run.join("voice-corpus.json");
     let output = Command::new("python3")
         .arg(&script)
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/voice-full.json"))
+        .arg(run.join("voice-full.json"))
         .arg("--corpus")
         .arg(&recaptured)
         .current_dir(&repository)

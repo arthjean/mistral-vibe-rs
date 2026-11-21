@@ -41,8 +41,9 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import OracleError, reexecute_pinned
+from reference import add_commit_argument
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/src/wire_validation/schema.json"
@@ -66,7 +67,7 @@ class Reducer:
         self.refs: dict[str, dict[str, Any]] = {}
         self.functions: set[str] = set()
 
-    def reduce_model(self, model: type) -> str:
+    def reduce_model(self, model: Any) -> str:
         model.model_rebuild()
         schema = model.__pydantic_core_schema__
         if schema.get("type") == "definitions":
@@ -220,7 +221,9 @@ class Reducer:
         for wrapper in reversed(post):
             function = wrapper["function"]
             callable_ = function.get("function") if isinstance(function, dict) else function
-            qualified = callable_.__qualname__
+            qualified = getattr(callable_, "__qualname__", None)
+            if not isinstance(qualified, str):
+                raise OracleError(f"unnamed model validator in {name}")
             self.functions.add(qualified)
             reduced.setdefault("validators", []).append({"mode": wrapper["type"], "function": qualified})
         self.defs[name] = reduced
@@ -492,7 +495,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     arguments = parser.parse_args()
     try:
         commit, _ = reexecute_pinned(arguments.reference, arguments.expected_commit)

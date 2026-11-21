@@ -422,7 +422,7 @@ async fn oauth_token(request: reqwest::RequestBuilder) -> Result<Token, LocalFai
         .get("access_token")
         .and_then(Value::as_str)
         .filter(|token| !token.is_empty())
-        .ok_or_else(|| failure("Vertex AI credential refresh did not produce a token"))?;
+        .ok_or_else(|| failure("refreshing the Vertex AI credentials returned no access token"))?;
     let expiry = answer
         .get("expires_in")
         .and_then(|seconds| {

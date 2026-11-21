@@ -54,7 +54,7 @@ fn gateway_failure_refreshes_the_cache_without_a_new_version() {
     assert_eq!(
         resolution.error,
         Some(UpdateError::Gateway(
-            "Network error while checking for updates.".to_owned()
+            "The release server could not be reached.".to_owned()
         ))
     );
     assert_eq!(resolution.availability, None);
@@ -148,7 +148,7 @@ async fn discovery_persists_exactly_what_the_reference_persists() {
         .expect_err("forced discovery reaches the gateway");
     assert_eq!(
         error,
-        UpdateError::Gateway("Unable to determine whether an update is available.".to_owned())
+        UpdateError::Gateway("Could not tell whether an update is available.".to_owned())
     );
 }
 

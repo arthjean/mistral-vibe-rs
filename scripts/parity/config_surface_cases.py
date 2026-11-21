@@ -1305,8 +1305,8 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
         "name": "models-admin-allowlist-of-blanks-is-refused",
         "layers": [("admin", 'allowed_models = ["  "]\n')],
     },
-    # Compaction rides the active model's connection, so a compaction model on
-    # another provider warns and the active model compacts instead.
+    # A compaction model has to share the active model's connection, so one
+    # served elsewhere warns and the active model compacts in its place.
     {
         "name": "models-compaction-model-on-another-provider-warns",
         "layers": [

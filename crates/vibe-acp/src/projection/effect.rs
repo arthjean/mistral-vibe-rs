@@ -186,7 +186,7 @@ fn result_effect_content(entry: &Value, output_delta: &str) -> Vec<Value> {
     let mut content = Vec::new();
     match effect_kind(entry) {
         "shell" if state_status(entry) == "completed" => {
-            // The transcript arrives as output; a trailer would repeat its tail.
+            // The output already carries the transcript, so a trailer would only echo its end.
             return content;
         }
         "file_edit" => {

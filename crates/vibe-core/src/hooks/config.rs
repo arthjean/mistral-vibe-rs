@@ -340,13 +340,13 @@ fn validate_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError<'static>>>
     if hook_type == HookType::PostAgent && matcher.is_some() {
         return Err(vec![(
             "",
-            "Value error, match is only valid for tool hooks (pre_tool / post_tool)".to_owned(),
+            "Value error, match applies to tool hooks alone (pre_tool / post_tool)".to_owned(),
         )]);
     }
     if hook_type == HookType::PostAgent && strict {
         return Err(vec![(
             "",
-            "Value error, strict is only valid for tool hooks (pre_tool / post_tool)".to_owned(),
+            "Value error, strict applies to tool hooks alone (pre_tool / post_tool)".to_owned(),
         )]);
     }
     Ok(HookConfig {

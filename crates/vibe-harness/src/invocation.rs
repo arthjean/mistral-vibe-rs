@@ -1,11 +1,11 @@
 //! Skills a user invokes by typing `/name`.
 //!
-//! The harness has no way to insert a synthetic tool exchange, so the host
-//! appends each invoked skill's rendered body to the user message and names
-//! the skills in a reserved `userDisplayContent` block. The public projection
-//! recognizes those bodies again and presents the literal prompt followed by
-//! one settled `skill` effect per invoked skill, as a model-initiated load
-//! reads. Reference `vibe/app_server/_skill_invocation.py`.
+//! Since the harness cannot inject a made-up tool exchange, the host adds the
+//! rendered body of every skill the user called to the end of the user
+//! message, and lists those skills in a reserved `userDisplayContent` block.
+//! The public projection spots the bodies again and shows the prompt exactly
+//! as typed, then a settled `skill` effect for each called skill, the way a
+//! load the model started would look. Reference `vibe/app_server/_skill_invocation.py`.
 
 use serde_json::{Value, json};
 use vibe_core::skills::{
@@ -18,7 +18,7 @@ pub const DISPLAY_BLOCK: &str = "vibe.skill_invocation";
 
 const TRAILING_PUNCTUATION: &[char] =
     &['.', ',', ';', ':', '!', '?', ')', ']', '}', '\'', '"', '`'];
-/// What replaces a code span, so it never opens a new mention boundary.
+/// What stands in for a code span, so no mention boundary can start there.
 const REMOVED_CODE: char = '\0';
 
 /// The slash command's skill name, casefolded.
@@ -28,8 +28,9 @@ pub fn leading_skill_name(text: &str) -> Option<String> {
     rest.split_whitespace().next().map(str::to_lowercase)
 }
 
-/// Names of the `/name` mentions outside code, in order, without repeats.
-/// A leading `/name` is the slash command, not a mention.
+/// The distinct names of `/name` mentions found outside code, first
+/// occurrence first. A `/name` opening the text is the slash command and does
+/// not count as a mention.
 #[must_use]
 pub fn mentioned_skill_names(text: &str) -> Vec<String> {
     let prose = without_inline_code(&without_fenced_code(text));
@@ -147,7 +148,7 @@ fn without_inline_code(text: &str) -> String {
     out
 }
 
-/// Casefolded names the prompt invokes, the leading `/name` first.
+/// The casefolded names a prompt calls, starting with its opening `/name`.
 #[must_use]
 pub fn invoked_skill_names(text: &str) -> Vec<String> {
     let mut names: Vec<String> = leading_skill_name(text).into_iter().collect();
@@ -213,8 +214,8 @@ pub fn without_display(display: &Value) -> Value {
 }
 
 /// Where the appended bodies sit among a message's blocks, as
-/// `(block index, skill name)` in content order. `texts` holds each block's
-/// text, `None` for other blocks. A block counts when it renders or
+/// `(block index, skill name)` in content order. `texts` carries the text of
+/// every text block and `None` for any other kind. A block counts when it renders or
 /// acknowledges a skill the display names (any name, before the display
 /// recorded them) and the rest of the text still invokes that skill.
 #[must_use]

@@ -667,10 +667,11 @@ pub(super) fn set_selected_mcp(state: &mut TuiState, enabled: bool) -> Option<Mc
         return None;
     }
     // Reference `MCPApp._reject_plugin_toggle`, for the server row and its
-    // tool rows alike: a plugin server has no `[[mcp_servers]]` entry to write.
+    // tool rows alike: no `[[mcp_servers]]` entry backs a plugin server, so
+    // there is nothing to write.
     if let Some(plugin) = &target.plugin_name {
         state.push_diagnostic(format!(
-            "{} is managed by the {plugin} plugin and cannot be toggled here.",
+            "{} belongs to the {plugin} plugin, so it cannot be toggled from here.",
             target.source
         ));
         return None;
@@ -713,7 +714,7 @@ mod tests {
         assert_eq!(set_selected_mcp(&mut state, false), None);
         assert_eq!(
             state.diagnostics().collect::<Vec<_>>(),
-            ["linter is managed by the lint-kit plugin and cannot be toggled here."]
+            ["linter belongs to the lint-kit plugin, so it cannot be toggled from here."]
         );
     }
 

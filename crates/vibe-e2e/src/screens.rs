@@ -389,7 +389,7 @@ pub fn normalized(
         texts.push(if authored_only(&text, authored) {
             json!({"text": text})
         } else {
-            json!({"length": text.chars().count(), "sha256": sha256(&text)})
+            json!({"prose": text.chars().count(), "sha256": sha256(&text)})
         });
         let mut runs: Vec<(u16, u16, String)> = Vec::new();
         for col in 0..cols {
@@ -631,7 +631,7 @@ pub fn render(screen: &Value) -> String {
             || {
                 format!(
                     "<{} characters, {}>",
-                    row["length"],
+                    row["prose"],
                     &row["sha256"].as_str().unwrap_or("")
                         [..12.min(row["sha256"].as_str().unwrap_or("").len())]
                 )

@@ -1,77 +1,305 @@
 {
   "corpus": "crates/vibe-core/tests/experiments/corpus.json",
   "measuredAgainst": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "experiments parity:": {
       "constants": {
-        "/value/configuredFields": 1,
-        "/value/defaultVariants": 1,
-        "/value/experimentNames": 1
+        "/value/configuredFields": {
+          "count": 1,
+          "fingerprint": "3cbedbfae3416b63",
+          "level": "exact"
+        },
+        "/value/defaultVariants": {
+          "count": 1,
+          "fingerprint": "7021bbe3b117edda",
+          "level": "exact"
+        },
+        "/value/experimentNames": {
+          "count": 1,
+          "fingerprint": "b935348e4222ff2a",
+          "level": "exact"
+        }
       },
       "evalFailures": {
-        "/variants/body-fails-validation": 1,
-        "/variants/connection-error": 1,
-        "/variants/non-json-body": 1,
-        "/variants/status-400": 1,
-        "/variants/status-404": 1,
-        "/variants/status-500": 1,
-        "/variants/status-503": 1,
-        "/variants/timeout": 1,
-        "/variants/url-unset": 1
+        "/variants/body-fails-validation": {
+          "count": 1,
+          "fingerprint": "c1134c3e40296469",
+          "level": "exact"
+        },
+        "/variants/connection-error": {
+          "count": 1,
+          "fingerprint": "dfc598248dd3d574",
+          "level": "exact"
+        },
+        "/variants/non-json-body": {
+          "count": 1,
+          "fingerprint": "b44f458d57aca8e4",
+          "level": "exact"
+        },
+        "/variants/status-400": {
+          "count": 1,
+          "fingerprint": "43052e30f9478d1d",
+          "level": "exact"
+        },
+        "/variants/status-404": {
+          "count": 1,
+          "fingerprint": "f589135d8db6f789",
+          "level": "exact"
+        },
+        "/variants/status-500": {
+          "count": 1,
+          "fingerprint": "74eb914097db9c02",
+          "level": "exact"
+        },
+        "/variants/status-503": {
+          "count": 1,
+          "fingerprint": "72c10208f5f14672",
+          "level": "exact"
+        },
+        "/variants/timeout": {
+          "count": 1,
+          "fingerprint": "6129bb43a4d7a2c0",
+          "level": "exact"
+        },
+        "/variants/url-unset": {
+          "count": 1,
+          "fingerprint": "509537cd6f1ab6da",
+          "level": "exact"
+        }
       },
       "layerPrecedence": {
-        "/effective/routing-variant-for-an-unpinned-user": 1
+        "/effective/routing-variant-for-an-unpinned-user": {
+          "count": 1,
+          "fingerprint": "83579df066b1f672",
+          "level": "exact"
+        }
       },
       "surfaces": {
-        "/eligible/vibe_cli_default_agent": 1,
-        "/eligible/vibe_cli_local_runtime_session_api_migration": 1,
-        "/eligible/vibe_cli_mistral_mcp_connector": 1,
-        "/eligible/vibe_cli_pr_monitoring": 1,
-        "/surfaces/vibe_cli_default_agent": 1,
-        "/surfaces/vibe_cli_local_runtime_session_api_migration": 1,
-        "/surfaces/vibe_cli_mistral_mcp_connector": 1,
-        "/surfaces/vibe_cli_pr_monitoring": 1
+        "/eligible/vibe_cli_default_agent": {
+          "count": 1,
+          "fingerprint": "fe8c5070f4d3599a",
+          "level": "exact"
+        },
+        "/eligible/vibe_cli_local_runtime_session_api_migration": {
+          "count": 1,
+          "fingerprint": "1f661bc80a211e92",
+          "level": "exact"
+        },
+        "/eligible/vibe_cli_mistral_mcp_connector": {
+          "count": 1,
+          "fingerprint": "a7d398b485660a62",
+          "level": "exact"
+        },
+        "/eligible/vibe_cli_pr_monitoring": {
+          "count": 1,
+          "fingerprint": "4b9f24217ba2a5fb",
+          "level": "exact"
+        },
+        "/surfaces/vibe_cli_default_agent": {
+          "count": 1,
+          "fingerprint": "fdfc6c2f0d49e0b6",
+          "level": "exact"
+        },
+        "/surfaces/vibe_cli_local_runtime_session_api_migration": {
+          "count": 1,
+          "fingerprint": "11f14903bcc83d82",
+          "level": "exact"
+        },
+        "/surfaces/vibe_cli_mistral_mcp_connector": {
+          "count": 1,
+          "fingerprint": "cf5cf5a101f6dbd3",
+          "level": "exact"
+        },
+        "/surfaces/vibe_cli_pr_monitoring": {
+          "count": 1,
+          "fingerprint": "6b198d98b45edea6",
+          "level": "exact"
+        }
       },
       "typedVariants": {
-        "/variants/booleans-spelled-as-strings": 1,
-        "/variants/default-value-off-its-baseline": 1,
-        "/variants/empty-collections": 1,
-        "/variants/every-name-at-its-typed-default": 1,
-        "/variants/every-name-forced-off-its-default": 1,
-        "/variants/exposure-labels-of-typed-values": 1,
-        "/variants/python-numeric-equality": 1,
-        "/variantsOrNone/booleans-spelled-as-strings": 1,
-        "/variantsOrNone/default-value-off-its-baseline": 1,
-        "/variantsOrNone/empty-collections": 1,
-        "/variantsOrNone/every-name-at-its-typed-default": 1,
-        "/variantsOrNone/every-name-forced-off-its-default": 1,
-        "/variantsOrNone/exposure-labels-of-typed-values": 1,
-        "/variantsOrNone/python-numeric-equality": 1
+        "/variants/booleans-spelled-as-strings": {
+          "count": 1,
+          "fingerprint": "ffb97d58a4ba4e16",
+          "level": "exact"
+        },
+        "/variants/default-value-off-its-baseline": {
+          "count": 1,
+          "fingerprint": "25f53645fb723ced",
+          "level": "exact"
+        },
+        "/variants/empty-collections": {
+          "count": 1,
+          "fingerprint": "c24f1536ec356504",
+          "level": "exact"
+        },
+        "/variants/every-name-at-its-typed-default": {
+          "count": 1,
+          "fingerprint": "a565ef2b9f6219c5",
+          "level": "exact"
+        },
+        "/variants/every-name-forced-off-its-default": {
+          "count": 1,
+          "fingerprint": "0500aa7b00c2d22c",
+          "level": "exact"
+        },
+        "/variants/exposure-labels-of-typed-values": {
+          "count": 1,
+          "fingerprint": "404f33692f37a4bc",
+          "level": "exact"
+        },
+        "/variants/python-numeric-equality": {
+          "count": 1,
+          "fingerprint": "f215747779394ed3",
+          "level": "exact"
+        },
+        "/variantsOrNone/booleans-spelled-as-strings": {
+          "count": 1,
+          "fingerprint": "32fe093ee601d179",
+          "level": "exact"
+        },
+        "/variantsOrNone/default-value-off-its-baseline": {
+          "count": 1,
+          "fingerprint": "211b84df21c15c4f",
+          "level": "exact"
+        },
+        "/variantsOrNone/empty-collections": {
+          "count": 1,
+          "fingerprint": "93c8726ea0446ef2",
+          "level": "exact"
+        },
+        "/variantsOrNone/every-name-at-its-typed-default": {
+          "count": 1,
+          "fingerprint": "d0b559bed6bd8b1a",
+          "level": "exact"
+        },
+        "/variantsOrNone/every-name-forced-off-its-default": {
+          "count": 1,
+          "fingerprint": "d3ecfc6849bc6ecd",
+          "level": "exact"
+        },
+        "/variantsOrNone/exposure-labels-of-typed-values": {
+          "count": 1,
+          "fingerprint": "23bb92994466a759",
+          "level": "exact"
+        },
+        "/variantsOrNone/python-numeric-equality": {
+          "count": 1,
+          "fingerprint": "2f98660de86aa865",
+          "level": "exact"
+        }
       },
       "variantResolution": {
-        "/variants/array-value": 1,
-        "/variants/boolean-value": 1,
-        "/variants/default-value-without-a-force": 1,
-        "/variants/empty-features": 1,
-        "/variants/every-known-feature": 1,
-        "/variants/numeric-value": 1,
-        "/variants/object-value": 1,
-        "/variants/resolved-null": 1,
-        "/variants/string-value": 1,
-        "/variants/uninitialized": 1,
-        "/variants/unknown-feature-key": 1,
-        "/variantsOrNone/array-value": 1,
-        "/variantsOrNone/boolean-value": 1,
-        "/variantsOrNone/default-value-without-a-force": 1,
-        "/variantsOrNone/empty-features": 1,
-        "/variantsOrNone/every-known-feature": 1,
-        "/variantsOrNone/numeric-value": 1,
-        "/variantsOrNone/object-value": 1,
-        "/variantsOrNone/resolved-null": 1,
-        "/variantsOrNone/string-value": 1,
-        "/variantsOrNone/uninitialized": 1,
-        "/variantsOrNone/unknown-feature-key": 1
+        "/variants/array-value": {
+          "count": 1,
+          "fingerprint": "69e856aaa2fbb8ff",
+          "level": "exact"
+        },
+        "/variants/boolean-value": {
+          "count": 1,
+          "fingerprint": "5aa5dffc4d8c129b",
+          "level": "exact"
+        },
+        "/variants/default-value-without-a-force": {
+          "count": 1,
+          "fingerprint": "e94c0e0a070f5081",
+          "level": "exact"
+        },
+        "/variants/empty-features": {
+          "count": 1,
+          "fingerprint": "17e5279336118050",
+          "level": "exact"
+        },
+        "/variants/every-known-feature": {
+          "count": 1,
+          "fingerprint": "46d72a17e292d051",
+          "level": "exact"
+        },
+        "/variants/numeric-value": {
+          "count": 1,
+          "fingerprint": "b162896a8a9597e9",
+          "level": "exact"
+        },
+        "/variants/object-value": {
+          "count": 1,
+          "fingerprint": "2b68a7c4e7b6fe8c",
+          "level": "exact"
+        },
+        "/variants/resolved-null": {
+          "count": 1,
+          "fingerprint": "b68859e8fdf46abc",
+          "level": "exact"
+        },
+        "/variants/string-value": {
+          "count": 1,
+          "fingerprint": "f074a3b278463d04",
+          "level": "exact"
+        },
+        "/variants/uninitialized": {
+          "count": 1,
+          "fingerprint": "ad3c0243b390c5f1",
+          "level": "exact"
+        },
+        "/variants/unknown-feature-key": {
+          "count": 1,
+          "fingerprint": "344e1a2cbe1d829c",
+          "level": "exact"
+        },
+        "/variantsOrNone/array-value": {
+          "count": 1,
+          "fingerprint": "8b4ca6c7b6263321",
+          "level": "exact"
+        },
+        "/variantsOrNone/boolean-value": {
+          "count": 1,
+          "fingerprint": "ed2a589499140ff9",
+          "level": "exact"
+        },
+        "/variantsOrNone/default-value-without-a-force": {
+          "count": 1,
+          "fingerprint": "30b4fbc717624b13",
+          "level": "exact"
+        },
+        "/variantsOrNone/empty-features": {
+          "count": 1,
+          "fingerprint": "a61df98ace0a8b66",
+          "level": "exact"
+        },
+        "/variantsOrNone/every-known-feature": {
+          "count": 1,
+          "fingerprint": "ac795af7bb419ec3",
+          "level": "exact"
+        },
+        "/variantsOrNone/numeric-value": {
+          "count": 1,
+          "fingerprint": "ae2f4c824c682f30",
+          "level": "exact"
+        },
+        "/variantsOrNone/object-value": {
+          "count": 1,
+          "fingerprint": "0ee9001a7978c207",
+          "level": "exact"
+        },
+        "/variantsOrNone/resolved-null": {
+          "count": 1,
+          "fingerprint": "1bf7ca0a58a4146e",
+          "level": "exact"
+        },
+        "/variantsOrNone/string-value": {
+          "count": 1,
+          "fingerprint": "5adf86b8ec018155",
+          "level": "exact"
+        },
+        "/variantsOrNone/uninitialized": {
+          "count": 1,
+          "fingerprint": "91c382b7e5dacb55",
+          "level": "exact"
+        },
+        "/variantsOrNone/unknown-feature-key": {
+          "count": 1,
+          "fingerprint": "6a12fe4f7722d579",
+          "level": "exact"
+        }
       }
     }
   }

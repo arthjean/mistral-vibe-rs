@@ -5,10 +5,11 @@ binary, over stdio in a fresh home, behind a local stand-in for the
 chat-completions API (:class:`stand_in.Backend`), and records what the server
 writes. This module holds the pieces every such capture shares: the
 directories a scenario runs in (:class:`World`), one server process and the
-client side of its connection (:class:`Agent`), the normalizer that maps
+client side of its connection (:class:`Agent`), and the normalizer that maps
 identifiers, paths and times to placeholders and reduces server-authored prose
-to a length and a digest (:class:`Normalizer`), and the requests an editor
-client sends over ACP. Nothing here imports the reference.
+to a length and a digest (:class:`Normalizer`). The requests an editor
+client sends over ACP are data, so they live in the scenario tables
+(``acp_scenarios.py``). Nothing here imports the reference.
 """
 
 from __future__ import annotations
@@ -67,6 +68,23 @@ ISO_TIME = re.compile(
     r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
 )
 COMPACT_TIME = re.compile(r"\d{8}_\d{6}")
+
+
+def time_token(value: Any) -> Any:
+    """The placeholder for a wall-clock reading, which keeps its type class:
+    an ISO-8601 string is `<time>`, another string `<time:text>`, an integer
+    epoch `<time:int>`, a float `<time:float>`, and null stays null, so a port
+    that sends an integer where the reference sends a string differs. A
+    boolean is not a reading and is returned as it is."""
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return "<time:int>"
+    if isinstance(value, float):
+        return "<time:float>"
+    if isinstance(value, str):
+        return "<time>" if ISO_TIME.fullmatch(value) else "<time:text>"
+    return "<time:other>"
 # A session log directory ends in the first eight hex digits of its identifier.
 SESSION_DIRECTORY = re.compile(r"(session_<time>_)[0-9a-f]{8}")
 #: A file URI over a fixture root as `Path.as_uri()` spells it on Windows.
@@ -442,8 +460,8 @@ class Normalizer:
             return {name: self.value(item, name) for name, item in value.items()}
         if isinstance(value, list):
             return [self.value(item, key) for item in value]
-        if key in TIME_KEYS and value is not None and not isinstance(value, bool):
-            return "<time>"
+        if key in TIME_KEYS:
+            return time_token(value)
         if key in DURATION_KEYS and isinstance(value, int | float):
             return "<nonzero>" if value else 0
         if isinstance(value, str):
@@ -461,74 +479,6 @@ class Normalizer:
                 return {"prose": len(text), "sha256": digest}
             return text
         return value
-
-
-def request(identifier: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"send": {"id": identifier, "method": method, "params": params or {}}}
-
-
-def notify(method: str, params: dict[str, Any]) -> dict[str, Any]:
-    return {"send": {"method": method, "params": params}}
-
-
-CLIENT_CAPABILITIES = {
-    "fs": {"readTextFile": True, "writeTextFile": True},
-    "terminal": True,
-}
-INITIALIZE = request(
-    0,
-    "initialize",
-    {
-        "protocolVersion": 1,
-        "clientCapabilities": CLIENT_CAPABILITIES,
-        "clientInfo": {"name": "oracle-client", "version": "1.0.0"},
-    },
-)
-NEW_SESSION = request(1, "session/new", {"cwd": "$WS", "mcpServers": []})
-
-
-def prompt(identifier: int, text: str, session: str = "$S1") -> dict[str, Any]:
-    return request(
-        identifier,
-        "session/prompt",
-        {"sessionId": session, "prompt": [{"type": "text", "text": text}]},
-    )
-
-
-def initialize(
-    capabilities: dict[str, Any] | None = None,
-    info: dict[str, Any] | None = None,
-    version: int = 1,
-    identifier: int = 0,
-) -> dict[str, Any]:
-    params: dict[str, Any] = {
-        "protocolVersion": version,
-        "clientCapabilities": CLIENT_CAPABILITIES if capabilities is None else capabilities,
-    }
-    params["clientInfo"] = info or {"name": "oracle-client", "version": "1.0.0"}
-    return request(identifier, "initialize", params)
-
-
-ELICITING = {**CLIENT_CAPABILITIES, "elicitation": {"form": {}}}
-
-
-def new_session(identifier: int = 1, **extra: Any) -> dict[str, Any]:
-    return request(identifier, "session/new", {"cwd": "$WS", "mcpServers": [], **extra})
-
-
-def ext(identifier: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return request(identifier, f"_{method}", params or {})
-
-
-APPROVE_ONCE = {"outcome": {"outcome": "selected", "optionId": "allow_once"}}
-APPROVE_SESSION = {"outcome": {"outcome": "selected", "optionId": "allow_always"}}
-REJECT = {"outcome": {"outcome": "selected", "optionId": "reject_once"}}
-DISMISS = {"outcome": {"outcome": "cancelled"}}
-#: The scoped options an approval of a path outside the workdir offers
-#: (reference `ToolOption` in `vibe/acp/utils.py`).
-APPROVE_FOLDER_SESSION = {"outcome": {"outcome": "selected",
-                                      "optionId": "allow_session_directory_recursive"}}
-APPROVE_FILE_PERMANENT = {"outcome": {"outcome": "selected", "optionId": "allow_permanent_exact"}}
 
 
 def rendered(payload: dict[str, Any]) -> str:

@@ -273,7 +273,7 @@ fn external_images_attach_but_unsupported_models_and_oversize_files_fail_atomica
     ));
     assert_eq!(
         unsupported.to_string(),
-        "Model `test-model` does not support images. Switch with /model or remove the attachment."
+        "Model `test-model` cannot read images. Pick another one with /model, or drop the attachment."
     );
 
     let oversized = temporary.path().join("oversized.png");

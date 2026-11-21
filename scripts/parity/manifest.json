@@ -13,15 +13,15 @@
       "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "8",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "386e4521f7949c544a7177ff756193c04df2afa13ca4d5f14ddb389c6a4262f8",
+      "sha256": "4ed28a97d448e5d564e3f4babc49f50887d14777de7b2988081588b086044694",
       "count": 104,
       "floors": {
         "argv": 22,
         "scenarios": 77
       },
       "debt": {
-        "sha256": "73ff18294ecdae916fa9cc64ebc9b17c47321a9562649f3b972012f30da8fea0",
-        "measuredAgainst": "386e4521f7949c544a7177ff756193c04df2afa13ca4d5f14ddb389c6a4262f8"
+        "sha256": "977ee1695e26a746f133569230213a54df80c4c7f3b61a688c6a38a497e8c7e7",
+        "measuredAgainst": "4ed28a97d448e5d564e3f4babc49f50887d14777de7b2988081588b086044694"
       }
     },
     {
@@ -55,14 +55,14 @@
       "test": "crates/vibe-app-server/tests/agent_loop_parity_tests.rs::the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "34",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "b41b27bac1272f72941f2f81e0d712221937668d3a2710605413c9a2efd603d5",
+      "sha256": "d6b245bd2944c3bb9d71ddd38f9321321aabb5f8c0266ef3e12613b30e0dfb54",
       "count": 31,
       "floors": {
         "scenarios": 30
       },
       "debt": {
-        "sha256": "5bcc7104113224c40d052b8be33366814e09bacf1a7e8302cbd8852354563f81",
-        "measuredAgainst": "b41b27bac1272f72941f2f81e0d712221937668d3a2710605413c9a2efd603d5"
+        "sha256": "feabdfa6b6f0f2e075258f07307c4824a46138c1efef1036efa7b17f5255e151",
+        "measuredAgainst": "d6b245bd2944c3bb9d71ddd38f9321321aabb5f8c0266ef3e12613b30e0dfb54"
       }
     },
     {
@@ -81,7 +81,7 @@
         "scenarios": 33
       },
       "debt": {
-        "sha256": "5da5a403965802554dd71b2cebef9890da0aa4efbcefdefec2b9b80139d454ed",
+        "sha256": "60874e20cdac5d612563ee32e6b0f959806dc8e894a36ee964930fbfa1b447c3",
         "measuredAgainst": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39"
       }
     },
@@ -119,14 +119,14 @@
       "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "21",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5",
+      "sha256": "b0160feec7e28263d378dfc2184e7beeb49e6ec345ddc9a64496048c4c4f44e3",
       "count": 43,
       "floors": {
         "scenarios": 41
       },
       "debt": {
-        "sha256": "66a868987a03d40c5551da3ce2d497e207eb1dbcb2cf52779c79c8fe69552940",
-        "measuredAgainst": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5"
+        "sha256": "52b3b509408f1cd6f447257a8f4cb46d3fd49a3e043f2bd375c6930c9d9ce08f",
+        "measuredAgainst": "b0160feec7e28263d378dfc2184e7beeb49e6ec345ddc9a64496048c4c4f44e3"
       }
     },
     {
@@ -141,14 +141,14 @@
       "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "21",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c",
+      "sha256": "fd88af8b22ba5b369c36e39a98642a589b40c18650191ba068565615bd33ff25",
       "count": 9,
       "floors": {
         "scenarios": 9
       },
       "debt": {
-        "sha256": "bbc8f85daa3872b7d42a9adb109897aff04808eb4f73eec848395bab095102e5",
-        "measuredAgainst": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c"
+        "sha256": "ee65e291de2c082f94dee7ffa7f5da713007deb0e11844ada663c650ae9be043",
+        "measuredAgainst": "fd88af8b22ba5b369c36e39a98642a589b40c18650191ba068565615bd33ff25"
       }
     },
     {
@@ -167,7 +167,7 @@
         "startup": 15
       },
       "debt": {
-        "sha256": "d03f6689d5b2613b2fdf013a8cc0cce480c0ccbdb3a8374d309006c4b106ab68",
+        "sha256": "b7ff0327aa6b92575ba35e8f51f7fe20c43148a77445c99d84a90de6a78bbfdd",
         "measuredAgainst": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911"
       }
     },
@@ -181,14 +181,14 @@
       "test": "crates/vibe-app-server/tests/hooks_parity_tests.rs::the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "18",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "86f518a047ddf19726df0d47129bd543136de9402115405e8f820edec441d54d",
+      "sha256": "ea6008996894927f2d762bb5e098495a931cce83b06aeb8fe6071b6f07309784",
       "count": 39,
       "floors": {
         "scenarios": 38
       },
       "debt": {
-        "sha256": "8471109bf6576781eeb31d481a9384c444bc13f6f06ac48fd3000cb755291dbf",
-        "measuredAgainst": "86f518a047ddf19726df0d47129bd543136de9402115405e8f820edec441d54d"
+        "sha256": "f1c898a0831d05723eb1a45fd018c1735180bbccb110f37d5c5cec91abc63feb",
+        "measuredAgainst": "ea6008996894927f2d762bb5e098495a931cce83b06aeb8fe6071b6f07309784"
       }
     },
     {
@@ -201,14 +201,14 @@
       "test": "crates/vibe-app-server/tests/mcp_catalog_parity_tests.rs::the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "11",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3",
+      "sha256": "4ae71765a6e9348fbe26ec84ebdf354b545db631ed084b4ee0f915b4f01ec3a4",
       "count": 15,
       "floors": {
         "scenarios": 15
       },
       "debt": {
-        "sha256": "b026e279de18ad4d4ba9c68eb84e2ae75fdf331fe6bb43aed5bf4c99760f42a0",
-        "measuredAgainst": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3"
+        "sha256": "30c5c0a9f145c70274b7fac5c5dcc686963374b7598ea64faaf221cfb83d21a7",
+        "measuredAgainst": "4ae71765a6e9348fbe26ec84ebdf354b545db631ed084b4ee0f915b4f01ec3a4"
       }
     },
     {
@@ -221,14 +221,14 @@
       "test": "crates/vibe-app-server/tests/mcp_oauth_parity_tests.rs::every_scenario_matches_the_reference_capture",
       "row": "11",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814",
+      "sha256": "8536a383de647943de8fe75942408fed2b22517b08c7d0a1c424f43b72bc5ff3",
       "count": 49,
       "floors": {
         "scenarios": 47
       },
       "debt": {
-        "sha256": "50c54a6aa9403b2cc20ca83457c4f90da17a69c87368c2da4d76796d89f35b3f",
-        "measuredAgainst": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814"
+        "sha256": "6d09fb2dbab37fe2b3a52b39b92bbd5b8a1e7115738eec254ee1e9755559c1ea",
+        "measuredAgainst": "8536a383de647943de8fe75942408fed2b22517b08c7d0a1c424f43b72bc5ff3"
       }
     },
     {
@@ -243,15 +243,15 @@
       "test": "crates/vibe-app-server/tests/plugins_parity_tests.rs::the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "35",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "df4d2a70480c89c41ea95a38ffc95f9523b6ce915f0b570c4925ef653e82ebff",
+      "sha256": "ed9d418294fce1d377c4a7aa412b1adadd5f4ab6506737e1e4014b8eb108d7af",
       "count": 9,
       "floors": {
         "scenarios": 9
       },
       "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first",
       "debt": {
-        "sha256": "73cc11fd4a3b24c4d175f17ce636e7a7f56e1cdca8b7dac16624fbd639da8ab7",
-        "measuredAgainst": "df4d2a70480c89c41ea95a38ffc95f9523b6ce915f0b570c4925ef653e82ebff"
+        "sha256": "f877def550af070707084db7b6f629816e552370e269f20465c775d57618f29d",
+        "measuredAgainst": "ed9d418294fce1d377c4a7aa412b1adadd5f4ab6506737e1e4014b8eb108d7af"
       }
     },
     {
@@ -270,7 +270,7 @@
         "scenarios": 114
       },
       "debt": {
-        "sha256": "f7435b421c46f1a0659c94957829bba7dab2b5cfba23c1bfbf862d733c278b66",
+        "sha256": "e10c8526f7b5356e6e5c64122c477a388a5a981fdcbd87406c5825a6dcbe9235",
         "measuredAgainst": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2"
       }
     },
@@ -284,14 +284,14 @@
       "test": "crates/vibe-app-server/tests/protocol_parity_tests.rs::the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "17",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36",
+      "sha256": "fb8f2556c1958073afc0e2982d329327335f2106915a06c3837d7976726300c0",
       "count": 400,
       "floors": {
         "scenarios": 380
       },
       "debt": {
-        "sha256": "fe83e5ae7dd0f93c0148a6c49bee03447c52563fc847b310e241789dc82311a8",
-        "measuredAgainst": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36"
+        "sha256": "1a05452736910e69dd132b6d157c4cda7b9a5745db5bcda1b2d26cf2170695f1",
+        "measuredAgainst": "fb8f2556c1958073afc0e2982d329327335f2106915a06c3837d7976726300c0"
       }
     },
     {
@@ -304,14 +304,14 @@
       "test": "crates/vibe-app-server/tests/review_parity_tests.rs::the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "15",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4",
+      "sha256": "a061169d8b50bb178ed996b160654dca88b75c62c13f78918880b9e4d8f5d7b7",
       "count": 29,
       "floors": {
         "scenarios": 28
       },
       "debt": {
-        "sha256": "bc4ede75a96e77606eb12fdd634621a38937a1abcdc4840eb6e072d2b605956c",
-        "measuredAgainst": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4"
+        "sha256": "1288cedde0f081191031c4b8b8ee6c2922048455995bd8e058709aec1760d98a",
+        "measuredAgainst": "a061169d8b50bb178ed996b160654dca88b75c62c13f78918880b9e4d8f5d7b7"
       }
     },
     {
@@ -324,14 +324,14 @@
       "test": "crates/vibe-app-server/tests/rewind_parity_tests.rs::the_port_rewinds_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "9",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d",
+      "sha256": "5d4b9bdff90f36b7c9ae469896f49aed41dd84805d0d628ffea2f73870c71960",
       "count": 12,
       "floors": {
         "scenarios": 12
       },
       "debt": {
-        "sha256": "b5f5c472897875b2066a8df4c53fa951fa3cf4f8290e35672884201e24a5548e",
-        "measuredAgainst": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d"
+        "sha256": "7c4349a9352b5e944a67775c707050fa28595379f022ef4a7230b61b7e9d62d2",
+        "measuredAgainst": "5d4b9bdff90f36b7c9ae469896f49aed41dd84805d0d628ffea2f73870c71960"
       }
     },
     {
@@ -344,14 +344,14 @@
       "test": "crates/vibe-app-server/tests/session_parity_tests.rs::the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "16",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "cad5f4d21d89dc8c9992f8220d4abdc79dffa692bb3034f06611525e70de7ff8",
+      "sha256": "e178cdc4764c74386a60be68a99f408f20413428692254e211869314fc1e747a",
       "count": 25,
       "floors": {
         "scenarios": 24
       },
       "debt": {
-        "sha256": "bb416e935ceb51accd3c8ccb3f6ad1b607e6b86985d82ce589416f574e85f664",
-        "measuredAgainst": "cad5f4d21d89dc8c9992f8220d4abdc79dffa692bb3034f06611525e70de7ff8"
+        "sha256": "c775df8cbd2bf6a34a423f2cd253b05b70c559d5adf8c38bb43f49a0fbb42abf",
+        "measuredAgainst": "e178cdc4764c74386a60be68a99f408f20413428692254e211869314fc1e747a"
       }
     },
     {
@@ -370,7 +370,7 @@
         "scenarios": 99
       },
       "debt": {
-        "sha256": "b6b31e3347a25f5be819046ba68c5a73b6f5b9172e0c611b3c1b1525767c5b00",
+        "sha256": "12ae2591b1843fb10e72be88a6631720c8a7275f80583c5bf2f67125a1c97cf4",
         "measuredAgainst": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7"
       }
     },
@@ -391,7 +391,7 @@
       },
       "note": "records the host platform: capture on Linux",
       "debt": {
-        "sha256": "01ea2787643a0f402ac7e9b165a84a6a24f68a651061ec8bc6cacb4531fb3534",
+        "sha256": "6ad144f9f6712d6d8ede0474971aae972c1d17454b41d372638b1910c368c8af",
         "measuredAgainst": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229"
       }
     },
@@ -431,7 +431,7 @@
       "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::arguments_the_reference_rejects_are_rejected_here_too",
       "row": "3",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "3f1c45e2429496f30b6468c88464aa9cdc3cec670cdcc1dc7160f24a20f692c3",
+      "sha256": "789ed09d6b81d626f9da398aa4d8a1ae9718b55302d72cffcbb0d9adbce0e4b2",
       "count": 95,
       "floors": {
         "fixtures": 82,
@@ -483,14 +483,14 @@
       "test": "crates/vibe-app-server/tests/unified_harness_parity_tests.rs::the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "36",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "56db1abc34952cd0943e49c4cb37cb674defc967cf8595be23db231f2a0aecd5",
+      "sha256": "ec60353ce8c8386e5f88123834a5576f6c052aa8e20aa6357a0905d6b9d18b72",
       "count": 89,
       "floors": {
         "scenarios": 85
       },
       "debt": {
-        "sha256": "7e8da07beae53aae2633380ea82d4746eb7c728d430ff1e9e8ef473761bf79df",
-        "measuredAgainst": "56db1abc34952cd0943e49c4cb37cb674defc967cf8595be23db231f2a0aecd5"
+        "sha256": "acf7dc3edccd8182ddd1a905939dd63afd67a8833c4c237d08b3d5f7e51be7b7",
+        "measuredAgainst": "ec60353ce8c8386e5f88123834a5576f6c052aa8e20aa6357a0905d6b9d18b72"
       }
     },
     {
@@ -510,7 +510,7 @@
       },
       "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry",
       "debt": {
-        "sha256": "d4320ea30980685782e04050ee34c931ead61f2a252b21af49b8e0aa6ddb35fa",
+        "sha256": "6822bf364157ba0ddfb991b65541640de1e3990fab13b1d9fc442fceb59c690e",
         "measuredAgainst": "b66c6446d753da9657101569e482e0d8ed4acb772f5cf936f28d767e82112627"
       }
     },
@@ -540,14 +540,14 @@
       "test": "crates/vibe-cli/tests/programmatic_parity_tests.rs::the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "13",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e",
+      "sha256": "d570c56cd5d6f79d617c912d666bbd7e5075bbbaee995d772f8ed950ed0f4388",
       "count": 57,
       "floors": {
         "scenarios": 55
       },
       "debt": {
-        "sha256": "efa2cfba6033587a00cc1088dc1bf70be26099a29d70d5e473fb0a2bf69f1c68",
-        "measuredAgainst": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e"
+        "sha256": "2c5a492e0cc9345c437a6015bb062118fc17e786c636a4cb42e3c9d343b07ed1",
+        "measuredAgainst": "d570c56cd5d6f79d617c912d666bbd7e5075bbbaee995d772f8ed950ed0f4388"
       }
     },
     {
@@ -566,7 +566,7 @@
         "scenarios": 64
       },
       "debt": {
-        "sha256": "b894c6d1f1060c4becb07cbc0d9827f1b8528aa482eba710a7ccbfc2f42ab1a8",
+        "sha256": "f7f91dbbd18a29c5099a19a5e91efe12280e04c0e4709ea0ea2bd7910c3958cf",
         "measuredAgainst": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3"
       }
     },
@@ -586,7 +586,7 @@
         "scenarios": 47
       },
       "debt": {
-        "sha256": "5ee5b739b145cf12073e5b02cef9eebf2c3df4f8fd33d1fcafbb43e8fb491ef6",
+        "sha256": "7d6be9f8c8c3cdb8ddda84cd1e1449335bbfc28a913cea5d0bf5901f2d2a3851",
         "measuredAgainst": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53"
       }
     },
@@ -607,7 +607,7 @@
       },
       "note": "the tui surface needs a POSIX pseudo-terminal: capture on Linux",
       "debt": {
-        "sha256": "3b4e182f086a9c8a7706f00b36e6f560061beec04b8aeef8f6df16352f48bda5",
+        "sha256": "66ff2a51656f56974ac3baf63aff841b933b72a0adb44506acc4dbc026a4d6c7",
         "measuredAgainst": "232ac5cb5fc2eed836caef4bed418832a9c435ad75ca20b579203739e09c153a"
       }
     },
@@ -631,14 +631,14 @@
       "test": "crates/vibe-cli/tests/tui_blackbox_parity_tests.rs::the_commands_family_replays_against_the_port",
       "row": "2",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "8d7331b15eae987e24a9de933d39713015b5138c1f7a9f491ec03e1ec92fe6be",
+      "sha256": "67e37ebb0c85a40f0514873322359f5dfcec6f7b92fe4c391ab717e2e248a45c",
       "count": 3,
       "floors": {
         "scenarios": 3
       },
       "debt": {
-        "sha256": "c197f91d48caf2699bfb36990c3208d435a148b7c3e41b6d8928bb29585b0cc2",
-        "measuredAgainst": "8d7331b15eae987e24a9de933d39713015b5138c1f7a9f491ec03e1ec92fe6be"
+        "sha256": "e7c421de1b27bb0288567460efd8395a6cefb73c917a216afe19e2fea0de6879",
+        "measuredAgainst": "67e37ebb0c85a40f0514873322359f5dfcec6f7b92fe4c391ab717e2e248a45c"
       }
     },
     {
@@ -661,14 +661,14 @@
       "test": "crates/vibe-cli/tests/tui_blackbox_parity_tests.rs::the_composer_family_replays_against_the_port",
       "row": "14",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "85f43cd510ed23da5f45f4e1c08e42782c2165425e794c0da74f21117be43d3d",
+      "sha256": "d11dd82c167f7228e3a8b0a3e6b9e3408d53093b5c4b18c59eebf38a6edeef0a",
       "count": 2,
       "floors": {
         "scenarios": 2
       },
       "debt": {
-        "sha256": "98b3235420a393ceccc1c09687c951a6f50c15cf3e1b54f459f94810ee5d4e71",
-        "measuredAgainst": "85f43cd510ed23da5f45f4e1c08e42782c2165425e794c0da74f21117be43d3d"
+        "sha256": "cea97fff4a97b3df62800d379e570c567d2f71efc59dbbaffabd6b407d29a1dc",
+        "measuredAgainst": "d11dd82c167f7228e3a8b0a3e6b9e3408d53093b5c4b18c59eebf38a6edeef0a"
       }
     },
     {
@@ -691,14 +691,14 @@
       "test": "crates/vibe-cli/tests/tui_blackbox_parity_tests.rs::the_paths_family_replays_against_the_port",
       "row": "23",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "76e1a4dd6815cdb70fd68c7196c6cae3de05f9d24ec5a5513e3a748504167d19",
+      "sha256": "b2c07de8be54fa4903baeaef1325dc686b08aa34a4746fc992f3158d7acfbb12",
       "count": 2,
       "floors": {
         "scenarios": 2
       },
       "debt": {
-        "sha256": "41a485ee4979739d06f7a36ba6edea8b4235401ea708fcc74f5abdf233419827",
-        "measuredAgainst": "76e1a4dd6815cdb70fd68c7196c6cae3de05f9d24ec5a5513e3a748504167d19"
+        "sha256": "36d76ce66fdf1ae35bd10ce7d912a143091217c0c802452fccd167c6d7ab35d9",
+        "measuredAgainst": "b2c07de8be54fa4903baeaef1325dc686b08aa34a4746fc992f3158d7acfbb12"
       }
     },
     {
@@ -721,14 +721,14 @@
       "test": "crates/vibe-cli/tests/tui_blackbox_parity_tests.rs::the_startup_family_replays_against_the_port",
       "row": "14",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "21a8c7b8a899ff7542b169095daaa89e2bc3f52fbca48cb7b3036bd9805961bd",
+      "sha256": "f157a02bf6e49841dd7d22646bb60cb0b0faca0a21092b24b05e66452f58c3ce",
       "count": 4,
       "floors": {
         "scenarios": 4
       },
       "debt": {
-        "sha256": "f09669cc190bc9d8ad77ff4789e394c07d38767c07fa0b6908ee1bb10aad294a",
-        "measuredAgainst": "21a8c7b8a899ff7542b169095daaa89e2bc3f52fbca48cb7b3036bd9805961bd"
+        "sha256": "62062af87b73bec6c6a805b22c57e5ece609c11e84f074761532d5b2d5ea400c",
+        "measuredAgainst": "f157a02bf6e49841dd7d22646bb60cb0b0faca0a21092b24b05e66452f58c3ce"
       }
     },
     {
@@ -751,14 +751,14 @@
       "test": "crates/vibe-cli/tests/tui_blackbox_parity_tests.rs::the_transcript_family_replays_against_the_port",
       "row": "14",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "6e04ba7b4088e9c678efdd573b4d0d27b00a885afe33a937f5ae8ba3dc8360f1",
+      "sha256": "859a4e98d3abdfac4ca379ba1279cfdb81d964eaf3ac85fdadd946c43e5bba40",
       "count": 3,
       "floors": {
         "scenarios": 3
       },
       "debt": {
-        "sha256": "7690f44a8fb9a53aec8a9f758ff7c95181f3767027101493bdbbecc48687f6c9",
-        "measuredAgainst": "6e04ba7b4088e9c678efdd573b4d0d27b00a885afe33a937f5ae8ba3dc8360f1"
+        "sha256": "225b07d0e0a078ba56266ab8adf650dea9b62d1d755b2839cbe60ae079505d6e",
+        "measuredAgainst": "859a4e98d3abdfac4ca379ba1279cfdb81d964eaf3ac85fdadd946c43e5bba40"
       }
     },
     {
@@ -810,7 +810,7 @@
         "summaryExtractions": 16
       },
       "debt": {
-        "sha256": "31eecfb0136c923b402b53cc62beb3e2905882ebfe3d0ecabce9aaffd90a61f4",
+        "sha256": "2f2ac334395f20b00a322cb32fec45d084e0ef504b517aac49345b46c50758ad",
         "measuredAgainst": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5"
       }
     },
@@ -843,7 +843,7 @@
         "strategies": 3
       },
       "debt": {
-        "sha256": "683af1febbb2e42ffb269c51a406656fbd62dc4288e03980b748d17bbe80daf0",
+        "sha256": "663066a3dfaf2f19812c7bd60b3d0a8a3cbe314673427b86fcebb99ec9ffc9a7",
         "measuredAgainst": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6"
       }
     },
@@ -879,7 +879,7 @@
         "variantResolution": 11
       },
       "debt": {
-        "sha256": "05d9d810def8f5853a4155d9eebdbe8ac8fee68dceafef68a8f636e48ff16004",
+        "sha256": "b06fd669f953188412013ca6839e408b6867a7449c20c39fb1c963b07dd9bc30",
         "measuredAgainst": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd"
       }
     },
@@ -903,7 +903,7 @@
         "utilitySelections": 47
       },
       "debt": {
-        "sha256": "a6859fbfbf8174b902f7900935c41f34c4bb9078a4d424be2ae3a14f020efd6f",
+        "sha256": "acad7f85e7e5a424698143c58d25db13877a85ab46ad29ce56c77bcdd0164769",
         "measuredAgainst": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d"
       }
     },
@@ -954,7 +954,7 @@
         "cases": 12
       },
       "debt": {
-        "sha256": "5e5c7899c62dcaf2ca7a26c6a9e424a3de433801d9c641340ad28ebec75f54cb",
+        "sha256": "e2a65a0809d1606b554f76523d2e93ab56032415c38c1526eaedf18ed58f0e6d",
         "measuredAgainst": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc"
       }
     },
@@ -975,7 +975,7 @@
       "test": "crates/vibe-core/src/setup_auth_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "31",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "8ccd806cc447eb836c3b01f103e7bbabf7ccee76529b11458e4f990e3b33c95b",
+      "sha256": "fd64141556cdc22aea71e13967d63307007d5d75e6118e22ea6e8193ba4ca178",
       "count": 328,
       "floors": {
         "acpAuthProse": 5,
@@ -1002,7 +1002,7 @@
       "test": "crates/vibe-core/src/shell/shell_parity_tests.rs::every_resolution_matches_the_reference",
       "row": "6",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "cca3de77eea73bf45b3bc5f179945d8200e56ab35c31fd8f4faed9bd7addaf79",
+      "sha256": "e655957ee8bd26d2a368a1e025c525ad8ee156fb418fd49295621d3934a09366",
       "count": 342,
       "floors": {
         "allowlistGrants": 27,
@@ -1017,8 +1017,8 @@
         "windowsGrammar": 4
       },
       "debt": {
-        "sha256": "8b5e717f20baa2f617118eef09b5b2ad3c80d065c433c25238f114f0a75471bd",
-        "measuredAgainst": "cca3de77eea73bf45b3bc5f179945d8200e56ab35c31fd8f4faed9bd7addaf79"
+        "sha256": "42e2ddf9046e4180a8a1110bfbc2a5d2dc4c35b3d2754f76d6e63764edb6ce46",
+        "measuredAgainst": "e655957ee8bd26d2a368a1e025c525ad8ee156fb418fd49295621d3934a09366"
       }
     },
     {
@@ -1031,7 +1031,7 @@
       "test": "crates/vibe-core/src/skills/skills_parity_tests.rs::the_committed_corpus_replays_every_family_the_reference_answered",
       "row": "28",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "f1bf103ab3b8102c48d7614a3fcc2e05a1f879b63f35f85d085576fd739a2da8",
+      "sha256": "319b95b53c96468bff5a531dbf73b9bd6134598f2c787501bc4e4da59d379107",
       "count": 260,
       "floors": {
         "builtins": 2,
@@ -1050,8 +1050,8 @@
         "sync": 24
       },
       "debt": {
-        "sha256": "bc2647102ec7cd893bfb5de73e9d750d18435513ec1ca25cf572b51e2b728ed3",
-        "measuredAgainst": "f1bf103ab3b8102c48d7614a3fcc2e05a1f879b63f35f85d085576fd739a2da8"
+        "sha256": "32bd4c64dac42aee892745423d953af411a684dc5f17bd95b031d22ef20a7a4d",
+        "measuredAgainst": "319b95b53c96468bff5a531dbf73b9bd6134598f2c787501bc4e4da59d379107"
       }
     },
     {
@@ -1064,7 +1064,7 @@
       "test": "crates/vibe-core/src/telemetry/telemetry_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "27",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94",
+      "sha256": "f54849f95e5cd077639b6c4a32dea2af723c3820775dfbd251dfd3d8b52c148c",
       "count": 250,
       "floors": {
         "attachmentCounts": 4,
@@ -1085,8 +1085,8 @@
         "spans": 17
       },
       "debt": {
-        "sha256": "bb962a843fce6869dc11b7f9c328d537141e43febdbff70b6ae2a384708bfd83",
-        "measuredAgainst": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94"
+        "sha256": "e0c696a15dadb61912eb94ad0db2c3b1008d685e2ff4893b1c06b219aafc14b9",
+        "measuredAgainst": "f54849f95e5cd077639b6c4a32dea2af723c3820775dfbd251dfd3d8b52c148c"
       }
     },
     {
@@ -1108,7 +1108,7 @@
         "tools": 24
       },
       "debt": {
-        "sha256": "054c8ddae2e55ce555528ce47cf0399390d15fd7121e6ae53f7a458eeed0729a",
+        "sha256": "cdbfebebc48f6bc2385f1fa973b54c18793c769816964e48a8b7c9de645e8865",
         "measuredAgainst": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5"
       }
     },
@@ -1130,7 +1130,7 @@
         "tree": 3
       },
       "debt": {
-        "sha256": "2f82f7f6cb58cb1fc5af55891ec96ab6f285294073a32e5195f7ea9b25674127",
+        "sha256": "a9065856c1fbdf487ff21d165686ed5766310ebe5d8a2215d6cb6a09bdc86de8",
         "measuredAgainst": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087"
       }
     },
@@ -1144,7 +1144,7 @@
       "test": "crates/vibe-core/src/worktree/worktree_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "5",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "e36619bb5dd40a9d804beeca4c46e66891b115ba75f014662d5367c59ed35110",
+      "sha256": "c4aa7cf8eb41ef7b8074ea6fb41515a4a7e1374128edb2b73843e548daabd516",
       "count": 147,
       "floors": {
         "cases": 132,
@@ -1168,7 +1168,7 @@
         "scenarios": 127
       },
       "debt": {
-        "sha256": "1d56987bd54b699524dd938be1d8dc7f82fafc240ae30f73eab6591d13d8735b",
+        "sha256": "bf796f9930eafb50de9d221da401ee7841f597a8ae0adb0e4b07d702f2aeed2b",
         "measuredAgainst": "7fa3b30357703ac503d246f13dbb2f0cbe549efca98972ddd9ec0737739ba97d"
       }
     },
@@ -1200,7 +1200,7 @@
         "wireFrames": 26
       },
       "debt": {
-        "sha256": "b70819981d734b8161f7f30a67a215d9629541ae2e54bab0c79e7ded53b2c543",
+        "sha256": "fe89fdaf47860ee619fac8e4ad7731a662d461a21cc650739e55670fef51381a",
         "measuredAgainst": "451067b3a609b3669a097b889bb9f661a027ebc00b4102edb0764786e2164e75"
       }
     }

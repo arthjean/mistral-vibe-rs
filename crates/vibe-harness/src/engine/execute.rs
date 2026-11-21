@@ -316,7 +316,7 @@ async fn execute(
                     ToolResult::failed(
                         "tool_failed",
                         format!(
-                            "Skill \"{name}\" is not available to this runtime. Available skills: {listing}"
+                            "This runtime has no skill \"{name}\". Skills it offers: {listing}"
                         ),
                     )
                 }

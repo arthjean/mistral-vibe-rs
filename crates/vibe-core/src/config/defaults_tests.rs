@@ -24,7 +24,7 @@ fn shipped(user: &str) -> Result<ConfigSnapshot, ConfigError> {
     LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )
@@ -147,7 +147,7 @@ fn a_stack_that_configures_no_model_fails_the_load() {
     let error = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         Table::new(),
     )
@@ -173,7 +173,7 @@ fn writing_a_model_map_persists_the_list_form() {
     let config = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home.clone(),
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     );
@@ -375,7 +375,7 @@ fn routed(user: &str, experiments: &str) -> Result<ConfigSnapshot, ConfigError> 
     LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )

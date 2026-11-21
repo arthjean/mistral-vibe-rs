@@ -518,7 +518,7 @@ where
             ("login", true) => self.reply(harness, "Usage: `/mcp login <alias>`", None),
             _ => self.reply(
                 harness,
-                "Usage: `/mcp status`, `/mcp login <alias>`, or `/mcp logout <alias>`",
+                "Subcommands: `/mcp login <alias>`, `/mcp logout <alias>` and `/mcp status`",
                 None,
             ),
         }

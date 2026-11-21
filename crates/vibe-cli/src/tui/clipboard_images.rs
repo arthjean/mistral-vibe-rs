@@ -271,7 +271,7 @@ fn image_model_warning(model: Option<ImageModel<'_>>) -> String {
         || "The active model does not support images.".to_owned(),
         |model| {
             format!(
-                "Model `{}` does not support images. Switch with /model or ask me to enable image support for this model.",
+                "Model `{}` cannot read images. Pick another one with /model, or ask me to turn on image support for this model.",
                 model.alias
             )
         },

@@ -1,993 +1,3865 @@
 {
   "corpus": "crates/vibe-app-server/tests/protocol-parity/corpus.json",
-  "measuredAgainst": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36",
-  "schemaVersion": 1,
+  "measuredAgainst": "fb8f2556c1958073afc0e2982d329327335f2106915a06c3837d7976726300c0",
+  "schemaVersion": 2,
   "tallies": {
     "protocol parity:": {
       "flows/callback-approval": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/method": 15,
-        "/*/notifications/*/params/contextWindow": 10,
-        "/*/notifications/*/params/emittedAt": 1,
-        "/*/notifications/*/params/entry": 6,
-        "/*/notifications/*/params/entryId": 4,
-        "/*/notifications/*/params/eventId": 1,
-        "/*/notifications/*/params/patch": 6,
-        "/*/notifications/*/params/patch/*": 6,
-        "/*/notifications/*/params/patch/*/path": 2,
-        "/*/notifications/*/params/patch/*/value": 2,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/stats": 10,
-        "/*/notifications/*/params/turn": 3,
-        "/*/notifications/*/params/turnId": 10
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "5f1ea8bc6cef66f4",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 15,
+          "fingerprint": "f0a2f20faa5038a0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 10,
+          "fingerprint": "0f516bcbebe0820b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/emittedAt": {
+          "count": 1,
+          "fingerprint": "0ee3787e320ce574",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 6,
+          "fingerprint": "c08acbfcb311544d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entryId": {
+          "count": 4,
+          "fingerprint": "c1db6d870f0ee52f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/eventId": {
+          "count": 1,
+          "fingerprint": "bdc74dc46b446882",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 6,
+          "fingerprint": "95d9c0e5fb3c8ae6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 6,
+          "fingerprint": "b815529c01476df0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 2,
+          "fingerprint": "a7cfaa7d1da3f81e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 2,
+          "fingerprint": "166c1af53e06e33f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "aa31ff69b83339bb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 10,
+          "fingerprint": "1de9562c7aa4d4ed",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 3,
+          "fingerprint": "4e9f3c8a67610885",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 10,
+          "fingerprint": "e174f4907931839a",
+          "level": "exact"
+        }
       },
       "flows/callback-refused-delivery": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/method": 15,
-        "/*/notifications/*/params/contextWindow": 10,
-        "/*/notifications/*/params/emittedAt": 1,
-        "/*/notifications/*/params/entry": 6,
-        "/*/notifications/*/params/entryId": 4,
-        "/*/notifications/*/params/eventId": 1,
-        "/*/notifications/*/params/patch": 6,
-        "/*/notifications/*/params/patch/*": 6,
-        "/*/notifications/*/params/patch/*/path": 2,
-        "/*/notifications/*/params/patch/*/value": 2,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/stats": 10,
-        "/*/notifications/*/params/turn": 3,
-        "/*/notifications/*/params/turnId": 10
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "5f1ea8bc6cef66f4",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 15,
+          "fingerprint": "f0a2f20faa5038a0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 10,
+          "fingerprint": "0f516bcbebe0820b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/emittedAt": {
+          "count": 1,
+          "fingerprint": "0ee3787e320ce574",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 6,
+          "fingerprint": "c08acbfcb311544d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entryId": {
+          "count": 4,
+          "fingerprint": "c1db6d870f0ee52f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/eventId": {
+          "count": 1,
+          "fingerprint": "bdc74dc46b446882",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 6,
+          "fingerprint": "95d9c0e5fb3c8ae6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 6,
+          "fingerprint": "b815529c01476df0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 2,
+          "fingerprint": "a7cfaa7d1da3f81e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 2,
+          "fingerprint": "166c1af53e06e33f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "aa31ff69b83339bb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 10,
+          "fingerprint": "1de9562c7aa4d4ed",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 3,
+          "fingerprint": "4e9f3c8a67610885",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 10,
+          "fingerprint": "e174f4907931839a",
+          "level": "exact"
+        }
       },
       "flows/callback-reject": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/method": 15,
-        "/*/notifications/*/params/contextWindow": 10,
-        "/*/notifications/*/params/emittedAt": 1,
-        "/*/notifications/*/params/entry": 6,
-        "/*/notifications/*/params/entryId": 4,
-        "/*/notifications/*/params/eventId": 1,
-        "/*/notifications/*/params/patch": 6,
-        "/*/notifications/*/params/patch/*": 6,
-        "/*/notifications/*/params/patch/*/path": 2,
-        "/*/notifications/*/params/patch/*/value": 2,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/stats": 10,
-        "/*/notifications/*/params/turn": 3,
-        "/*/notifications/*/params/turnId": 10
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "5f1ea8bc6cef66f4",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 15,
+          "fingerprint": "f0a2f20faa5038a0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 10,
+          "fingerprint": "0f516bcbebe0820b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/emittedAt": {
+          "count": 1,
+          "fingerprint": "0ee3787e320ce574",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 6,
+          "fingerprint": "c08acbfcb311544d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entryId": {
+          "count": 4,
+          "fingerprint": "c1db6d870f0ee52f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/eventId": {
+          "count": 1,
+          "fingerprint": "bdc74dc46b446882",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 6,
+          "fingerprint": "95d9c0e5fb3c8ae6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 6,
+          "fingerprint": "b815529c01476df0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 2,
+          "fingerprint": "a7cfaa7d1da3f81e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 2,
+          "fingerprint": "166c1af53e06e33f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "aa31ff69b83339bb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 10,
+          "fingerprint": "1de9562c7aa4d4ed",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 3,
+          "fingerprint": "4e9f3c8a67610885",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 10,
+          "fingerprint": "e174f4907931839a",
+          "level": "exact"
+        }
       },
       "flows/config-writes": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 4,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 4,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 4,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 4,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 4,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 4,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 4,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 4,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 4,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 4,
-        "/*/notifications/*/params/runtime/experimentalHarness": 4,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 4,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 4,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 4,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 4,
-        "/*/response/error/message": 1,
-        "/*/response/result/reason": 4,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 5,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 5,
-        "/*/response/result/runtime/config/activeModel/source": 5,
-        "/*/response/result/runtime/config/cursorBlink": 5,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 5,
-        "/*/response/result/runtime/config/enableMouseCapture": 5,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 5,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 5,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 5,
-        "/*/response/result/runtime/config/models/<list>/source": 5,
-        "/*/response/result/runtime/experimentalHarness": 5,
-        "/*/response/result/runtime/mcp/connectorError": 5,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 5,
-        "/*/response/result/runtime/stats/modelCalls": 5,
-        "/*/response/result/runtime/tools/<list>/isCustom": 5
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 4,
+          "fingerprint": "3f8d294ef6ca6265",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 4,
+          "fingerprint": "31447ddc773f9a16",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 4,
+          "fingerprint": "77062e06fc597299",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 4,
+          "fingerprint": "6712ce3cebb7dcd8",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 4,
+          "fingerprint": "0a1d1b015ff01005",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 4,
+          "fingerprint": "4e60ab6141de26e7",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 4,
+          "fingerprint": "769d36e3f543dfca",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 4,
+          "fingerprint": "bccb6b2984d23a93",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 4,
+          "fingerprint": "c723af48905bbd8b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 4,
+          "fingerprint": "62a8f6ebbed4cb54",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 4,
+          "fingerprint": "b5ed85165841c7ca",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 4,
+          "fingerprint": "d6e86260ba01a91b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "29fe0775deed546b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 4,
+          "fingerprint": "09da82c71e5202d0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 4,
+          "fingerprint": "4053c155bdd78b05",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "a88366e8e9c9aec7",
+          "level": "exact"
+        },
+        "/*/response/result/reason": {
+          "count": 4,
+          "fingerprint": "12a129e688099877",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 5,
+          "fingerprint": "3e84d80dddc240e1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 5,
+          "fingerprint": "02c4689b91ee6b7f",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 5,
+          "fingerprint": "07ffb5c96174f9f9",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 5,
+          "fingerprint": "8e20272b0b28b5bc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 5,
+          "fingerprint": "40fea6f4e44a235d",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 5,
+          "fingerprint": "625dc65fc323c110",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 5,
+          "fingerprint": "5758bb22ec6c0fd1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 5,
+          "fingerprint": "b869a2cdcfa154bf",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 5,
+          "fingerprint": "0e090c788a17dddc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 5,
+          "fingerprint": "d87a6e1a7d1866f1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 5,
+          "fingerprint": "b0e468e89e1c1290",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 5,
+          "fingerprint": "189208424acab8f3",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 5,
+          "fingerprint": "d141a3e4a0cf6186",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 5,
+          "fingerprint": "772ce5f2c1e1d712",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 5,
+          "fingerprint": "7e9390ec06c5b8bb",
+          "level": "exact"
+        }
       },
       "flows/connector-catalog": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 3,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 3,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 3,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 3,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 3,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 3,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 3,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 3,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 3,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 3,
-        "/*/notifications/*/params/runtime/experimentalHarness": 3,
-        "/*/notifications/*/params/runtime/mcp/discoveryErrors/Mail_box": 3,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 3,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 3,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 3,
-        "/*/response/result/catalog/catalogRevision": 1,
-        "/*/response/result/catalog/connectors/<list>": 1,
-        "/*/response/result/privateConnectorsHidden": 5,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 3,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 3,
-        "/*/response/result/runtime/config/activeModel/source": 3,
-        "/*/response/result/runtime/config/cursorBlink": 3,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 3,
-        "/*/response/result/runtime/config/enableMouseCapture": 3,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 3,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 3,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 3,
-        "/*/response/result/runtime/config/models/<list>/source": 3,
-        "/*/response/result/runtime/experimentalHarness": 3,
-        "/*/response/result/runtime/mcp/discoveryErrors/Mail_box": 3,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
-        "/*/response/result/runtime/stats/modelCalls": 3,
-        "/*/response/result/runtime/tools/<list>/isCustom": 3,
-        "/*/response/result/session/sources/<list>/tools/<list>/description": 3
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 3,
+          "fingerprint": "b212f77eec0f10c5",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 3,
+          "fingerprint": "61b1169311a35c39",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 3,
+          "fingerprint": "f5113682bebd9b5d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 3,
+          "fingerprint": "c9a36051b3ef6705",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 3,
+          "fingerprint": "4eda914f5b95889d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 3,
+          "fingerprint": "3831bb12ef32b579",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 3,
+          "fingerprint": "888bbe25a9fc04b9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 3,
+          "fingerprint": "df4d8f52cb9d122e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 3,
+          "fingerprint": "d8e4b1c1c64d1bfd",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 3,
+          "fingerprint": "f6e8474b550cf461",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 3,
+          "fingerprint": "8e12007b6b960483",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/discoveryErrors/Mail_box": {
+          "count": 3,
+          "fingerprint": "b7f461c25248a9d5",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "c6b24d5cbbe3e6ee",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 3,
+          "fingerprint": "7781775eab7d6a8f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 3,
+          "fingerprint": "6d29e6b0e2fb4736",
+          "level": "exact"
+        },
+        "/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "be67cf41e4c9a2c2",
+          "level": "exact"
+        },
+        "/*/response/result/catalog/connectors/<empty>": {
+          "count": 1,
+          "fingerprint": "522b7cb002f2e44d",
+          "level": "exact"
+        },
+        "/*/response/result/catalog/connectors/<list>": {
+          "count": 1,
+          "fingerprint": "840a953ca5b8f34d",
+          "level": "exact"
+        },
+        "/*/response/result/privateConnectorsHidden": {
+          "count": 5,
+          "fingerprint": "23342bd7c5959884",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 3,
+          "fingerprint": "3a66a6d765b8b0b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 3,
+          "fingerprint": "faeae6538ada4b62",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 3,
+          "fingerprint": "bc1b2bbc980bc2c5",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 3,
+          "fingerprint": "5af186712aecd722",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 3,
+          "fingerprint": "83b58bf56ab01b85",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 3,
+          "fingerprint": "2a526410d954e89f",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 3,
+          "fingerprint": "2623c850208b4f66",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 3,
+          "fingerprint": "4d288bd90adfe5b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 3,
+          "fingerprint": "68d28958c9f503f2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 3,
+          "fingerprint": "dac62733b437c355",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 3,
+          "fingerprint": "467fd44e6cd2c6c4",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/discoveryErrors/Mail_box": {
+          "count": 3,
+          "fingerprint": "4f9f8497a02cab3d",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "3324ecbe576e5bf3",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 3,
+          "fingerprint": "6c067b1d92ebf9f5",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 3,
+          "fingerprint": "5173142f904a7ec5",
+          "level": "exact"
+        },
+        "/*/response/result/session/sources/<list>/tools/<list>/description": {
+          "count": 3,
+          "fingerprint": "9932e9573e1993b9",
+          "level": "exact"
+        }
       },
       "flows/context-inject": {
-        "/*/notifications/*": 2,
-        "/*/notifications/*/method": 2,
-        "/*/notifications/*/params/contextWindow": 1,
-        "/*/notifications/*/params/entry": 2,
-        "/*/notifications/*/params/entry/outcome": 1,
-        "/*/notifications/*/params/patch": 1,
-        "/*/notifications/*/params/stats": 1,
-        "/*/notifications/*/params/stats/modelCalls": 1,
-        "/*/notifications/*/params/turnId": 2,
-        "/*/response/result/entries/<list>/outcome": 2
+        "/*/notifications/*": {
+          "count": 2,
+          "fingerprint": "57cf6a73ba354dc6",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 2,
+          "fingerprint": "dee376f88b230ca9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 1,
+          "fingerprint": "9cffc081e4c66cf4",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 2,
+          "fingerprint": "1a2f65ffe2c2e0ec",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry/outcome": {
+          "count": 1,
+          "fingerprint": "b774ebb03836a328",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 1,
+          "fingerprint": "a77acba06c83ba03",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 1,
+          "fingerprint": "7bc06f9b15931560",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "e271728dba38f925",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 2,
+          "fingerprint": "f6efd4710333e1c9",
+          "level": "exact"
+        },
+        "/*/response/result/entries/<list>/outcome": {
+          "count": 2,
+          "fingerprint": "19e4ee21c6714e1d",
+          "level": "exact"
+        }
       },
       "flows/session-mutations": {
-        "/*/notifications/*": 2,
-        "/*/notifications/*/params/patch/*": 1,
-        "/*/notifications/*/params/patch/*/path": 1,
-        "/*/notifications/*/params/patch/*/value": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 2,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 2,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 2,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 2,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 2,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 2,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 2,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 2,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 2,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 2,
-        "/*/notifications/*/params/runtime/experimentalHarness": 2,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 2,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 2,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 2,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 2,
-        "/*/response/error": 2,
-        "/*/response/error/code": 1,
-        "/*/response/result": 2
+        "/*/notifications/*": {
+          "count": 2,
+          "fingerprint": "99dc472be68f61b4",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 1,
+          "fingerprint": "66efd46a1d7529b6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 1,
+          "fingerprint": "bec742ddf9fc511a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 1,
+          "fingerprint": "47282101e6df1d1a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 2,
+          "fingerprint": "7fa2a94e557846a4",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 2,
+          "fingerprint": "f8cd9e89255738f2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 2,
+          "fingerprint": "b00d36a5e54abe28",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 2,
+          "fingerprint": "2ef545ed37f665b4",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 2,
+          "fingerprint": "d3735a53f7dccf7d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 2,
+          "fingerprint": "62f8baafefdacde4",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 2,
+          "fingerprint": "73f94999c89bd2ff",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 2,
+          "fingerprint": "6f00457872adf176",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 2,
+          "fingerprint": "97323aa990acc4e8",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 2,
+          "fingerprint": "26dda605ca87dfbe",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 2,
+          "fingerprint": "16b6085032ab2f5a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "95b3f0727a928f6b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "3d8f5803363b5f91",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 2,
+          "fingerprint": "aead4cdefd00bc90",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 2,
+          "fingerprint": "665ce5c4b5b9bfc0",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "1c6970111f2d6975",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "216feb1734022e35",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "afa0fdf983599b2f",
+          "level": "exact"
+        }
       },
       "flows/session-start": {
-        "/*/notifications/*/method": 1,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/sessionId": 1,
-        "/*/notifications/*/params/warning": 1,
-        "/*/response/error": 1,
-        "/*/response/result": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*/method": {
+          "count": 1,
+          "fingerprint": "4a3c85efb46ab8d7",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "577576d9eaa9504f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/sessionId": {
+          "count": 1,
+          "fingerprint": "55c9f78753d69775",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/warning": {
+          "count": 1,
+          "fingerprint": "3dd7d853c00c653d",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "92393e434add4b83",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "c0f5cb375f0a6a49",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "flows/session-start-refusals": {
-        "/*/notifications/*/method": 1,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/sessionId": 1,
-        "/*/notifications/*/params/warning": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*/method": {
+          "count": 1,
+          "fingerprint": "155af08b1b51824a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "b5075db48f58fd5e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/sessionId": {
+          "count": 1,
+          "fingerprint": "2568159804e2d006",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/warning": {
+          "count": 1,
+          "fingerprint": "fb6631949c583b22",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "5f6c347be7611261",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "7331888ef53784e7",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "8a7c44b03ff2fd77",
+          "level": "exact"
+        }
       },
       "flows/setup": {
-        "/*/response/result/activeCredentialSource": 5,
-        "/*/response/result/mistralActiveCredentialSource": 5,
-        "/*/response/result/mistralProvider": 5,
-        "/*/response/result/pinnedConsoleUrl": 5
+        "/*/response/result/activeCredentialSource": {
+          "count": 5,
+          "fingerprint": "b2aa7bccd19de953",
+          "level": "exact"
+        },
+        "/*/response/result/mistralActiveCredentialSource": {
+          "count": 5,
+          "fingerprint": "6ddc71c1af440ae9",
+          "level": "exact"
+        },
+        "/*/response/result/mistralProvider": {
+          "count": 5,
+          "fingerprint": "57238fe28553f069",
+          "level": "exact"
+        },
+        "/*/response/result/pinnedConsoleUrl": {
+          "count": 5,
+          "fingerprint": "3e01951447c43b5b",
+          "level": "exact"
+        }
       },
       "flows/shell-command": {
-        "/*/notifications/*": 1,
-        "/*/response/error/message": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "e3f1face1729f98e",
+          "level": "exact"
+        }
       },
       "flows/skills-registry": {
-        "/*/notifications/*": 6,
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 13,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 13,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 13,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 13,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 13,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 13,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 13,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 13,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 13,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 13,
-        "/*/notifications/*/params/runtime/experimentalHarness": 13,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 13,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 13,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 13,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 13,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 13,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 13,
-        "/*/response/result/runtime/config/activeModel/source": 13,
-        "/*/response/result/runtime/config/cursorBlink": 13,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 13,
-        "/*/response/result/runtime/config/enableMouseCapture": 13,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 13,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 13,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 13,
-        "/*/response/result/runtime/config/models/<list>/source": 13,
-        "/*/response/result/runtime/experimentalHarness": 13,
-        "/*/response/result/runtime/mcp/connectorError": 13,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 13,
-        "/*/response/result/runtime/stats/modelCalls": 13,
-        "/*/response/result/runtime/tools/<list>/isCustom": 13,
-        "/*/response/result/skills/<list>": 1
+        "/*/notifications/*": {
+          "count": 6,
+          "fingerprint": "461d4013af270899",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 13,
+          "fingerprint": "05de6b07bedca2cc",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 13,
+          "fingerprint": "8fc1d3e185cd0ba6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 13,
+          "fingerprint": "7ecd2af0d6e0599b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 13,
+          "fingerprint": "06eb0b2ee962b418",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 13,
+          "fingerprint": "fa6214281886ad29",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 13,
+          "fingerprint": "fe08b8d7e852301e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 13,
+          "fingerprint": "319bb1076589f0b6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 13,
+          "fingerprint": "bba1cc839075f78e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 13,
+          "fingerprint": "69a5fdd30ab4e4e2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 13,
+          "fingerprint": "e539e920fad54aa5",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 13,
+          "fingerprint": "3ffb83b54167a14d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 13,
+          "fingerprint": "2e05fd704083e669",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 13,
+          "fingerprint": "0291ec696cb67d7f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 13,
+          "fingerprint": "4788febf0ab1f2c9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 13,
+          "fingerprint": "a588c99d7783f46c",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 13,
+          "fingerprint": "e1f65e02007970ee",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 13,
+          "fingerprint": "14464e629d80304d",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 13,
+          "fingerprint": "9ee75a8e5709b51d",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 13,
+          "fingerprint": "130a328720915c2c",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 13,
+          "fingerprint": "53905d8907d05b60",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 13,
+          "fingerprint": "529879a28b2f08d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 13,
+          "fingerprint": "f54e66c6e74ddd95",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 13,
+          "fingerprint": "d76d7a7d13e59562",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 13,
+          "fingerprint": "bcde603068e63931",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 13,
+          "fingerprint": "4a606ff64cbd6be6",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 13,
+          "fingerprint": "063b16ba72c9fc04",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 13,
+          "fingerprint": "60cc85bca46b481f",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 13,
+          "fingerprint": "4c2667a4958686e9",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 13,
+          "fingerprint": "aeb07b24b9b24609",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 13,
+          "fingerprint": "be33eba242ad6ce9",
+          "level": "exact"
+        },
+        "/*/response/result/skills/<empty>": {
+          "count": 1,
+          "fingerprint": "14fdcdac9da81fb2",
+          "level": "exact"
+        },
+        "/*/response/result/skills/<list>": {
+          "count": 1,
+          "fingerprint": "84af6d07b81e1563",
+          "level": "exact"
+        }
       },
       "flows/turn-lifecycle": {
-        "/*/notifications/*": 2,
-        "/*/notifications/*/method": 11,
-        "/*/notifications/*/params/contextWindow": 7,
-        "/*/notifications/*/params/emittedAt": 1,
-        "/*/notifications/*/params/entry": 4,
-        "/*/notifications/*/params/entryId": 2,
-        "/*/notifications/*/params/eventId": 1,
-        "/*/notifications/*/params/patch": 4,
-        "/*/notifications/*/params/patch/*": 4,
-        "/*/notifications/*/params/patch/*/path": 1,
-        "/*/notifications/*/params/patch/*/value": 1,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/stats": 7,
-        "/*/notifications/*/params/turn": 4,
-        "/*/notifications/*/params/turnId": 6,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 2
+        "/*/notifications/*": {
+          "count": 2,
+          "fingerprint": "e5d2decedb0818b4",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 11,
+          "fingerprint": "c355730d29d2c17a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 7,
+          "fingerprint": "46a078299f36ba92",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/emittedAt": {
+          "count": 1,
+          "fingerprint": "0ee3787e320ce574",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 4,
+          "fingerprint": "f22ca8fca500fbea",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entryId": {
+          "count": 2,
+          "fingerprint": "ff37be329a75d402",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/eventId": {
+          "count": 1,
+          "fingerprint": "bdc74dc46b446882",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 4,
+          "fingerprint": "bc15d8ac0d929704",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 4,
+          "fingerprint": "e70b91a0856e079d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 1,
+          "fingerprint": "ce8a2c182baaa292",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 1,
+          "fingerprint": "a873690961770274",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "aa31ff69b83339bb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 7,
+          "fingerprint": "d56421847bc653a8",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 4,
+          "fingerprint": "6221e38e3c1c543e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 6,
+          "fingerprint": "f4b2266cb6888bbe",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "7669d5c949c7805c",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "bfbcaad33a60fde1",
+          "level": "exact"
+        },
+        "/*/response/result/lastEventId": {
+          "count": 1,
+          "fingerprint": "cc5358648a42b5dc",
+          "level": "exact"
+        }
       },
       "flows/turn-queue-busy": {
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result/waits": 2
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "9a86b2a42806e03d",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "a4cbc5929ba214b9",
+          "level": "exact"
+        },
+        "/*/response/result/waits": {
+          "count": 2,
+          "fingerprint": "a20034147713131e",
+          "level": "exact"
+        }
       },
       "flows/turn-queue-idle": {
-        "/*/notifications/*/params/entry/outcome": 2,
-        "/*/notifications/*/params/patch/*": 2,
-        "/*/notifications/*/params/patch/*/op": 2,
-        "/*/notifications/*/params/patch/*/path": 3,
-        "/*/notifications/*/params/patch/*/value": 1,
-        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
-        "/*/notifications/*/params/stats/modelCalls": 3
+        "/*/notifications/*/params/entry/outcome": {
+          "count": 2,
+          "fingerprint": "b86b2d504f066ece",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 2,
+          "fingerprint": "6ecfafd46e3917de",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/op": {
+          "count": 2,
+          "fingerprint": "fa96620c68355ca5",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 3,
+          "fingerprint": "6d4650fa3035fce3",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 1,
+          "fingerprint": "0ba437037a0691da",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": {
+          "count": 2,
+          "fingerprint": "abd976100b11fe22",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats/modelCalls": {
+          "count": 3,
+          "fingerprint": "461ae4f601294b1f",
+          "level": "exact"
+        }
       },
       "flows/turn-queue-interrupt": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/method": 2,
-        "/*/notifications/*/params/contextWindow": 1,
-        "/*/notifications/*/params/entry/outcome": 2,
-        "/*/notifications/*/params/patch/*": 1,
-        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
-        "/*/notifications/*/params/queue": 1,
-        "/*/notifications/*/params/stats": 1,
-        "/*/notifications/*/params/stats/modelCalls": 3,
-        "/*/notifications/*/params/turn": 2,
-        "/*/response/result/waits": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "295aefa74c5bb3d3",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 2,
+          "fingerprint": "5ee747cb1678768a",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 1,
+          "fingerprint": "32663cd0a6abbe12",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry/outcome": {
+          "count": 2,
+          "fingerprint": "c3f253c59e226a92",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 1,
+          "fingerprint": "99fb54c2c74ca854",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": {
+          "count": 2,
+          "fingerprint": "b3cb7567fe5e0576",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/queue": {
+          "count": 1,
+          "fingerprint": "ae7e913a234206ad",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 1,
+          "fingerprint": "fb2634db115b3c54",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats/modelCalls": {
+          "count": 3,
+          "fingerprint": "bb5029d2feeba7a7",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 2,
+          "fingerprint": "1ff28cb0a180da84",
+          "level": "exact"
+        },
+        "/*/response/result/waits": {
+          "count": 1,
+          "fingerprint": "cda5c9ef47ff76eb",
+          "level": "exact"
+        }
       },
       "flows/turn-queue-refusals": {
-        "/*/notifications/*": 10,
-        "/*/notifications/*/params/entry/outcome": 2,
-        "/*/notifications/*/params/patch/*": 2,
-        "/*/notifications/*/params/patch/*/op": 2,
-        "/*/notifications/*/params/patch/*/path": 3,
-        "/*/notifications/*/params/patch/*/value": 1,
-        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
-        "/*/notifications/*/params/stats/modelCalls": 3
+        "/*/notifications/*": {
+          "count": 10,
+          "fingerprint": "e6addc6df2ae9ac8",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry/outcome": {
+          "count": 2,
+          "fingerprint": "b86b2d504f066ece",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 2,
+          "fingerprint": "6ecfafd46e3917de",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/op": {
+          "count": 2,
+          "fingerprint": "fa96620c68355ca5",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 3,
+          "fingerprint": "6d4650fa3035fce3",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 1,
+          "fingerprint": "0ba437037a0691da",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": {
+          "count": 2,
+          "fingerprint": "abd976100b11fe22",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats/modelCalls": {
+          "count": 3,
+          "fingerprint": "461ae4f601294b1f",
+          "level": "exact"
+        }
       },
       "flows/turn-tools": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/method": 15,
-        "/*/notifications/*/params/contextWindow": 10,
-        "/*/notifications/*/params/emittedAt": 1,
-        "/*/notifications/*/params/entry": 6,
-        "/*/notifications/*/params/entryId": 4,
-        "/*/notifications/*/params/eventId": 1,
-        "/*/notifications/*/params/patch": 6,
-        "/*/notifications/*/params/patch/*": 6,
-        "/*/notifications/*/params/patch/*/path": 2,
-        "/*/notifications/*/params/patch/*/value": 2,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/stats": 10,
-        "/*/notifications/*/params/turn": 3,
-        "/*/notifications/*/params/turnId": 10
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "5f1ea8bc6cef66f4",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 15,
+          "fingerprint": "f0a2f20faa5038a0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/contextWindow": {
+          "count": 10,
+          "fingerprint": "0f516bcbebe0820b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/emittedAt": {
+          "count": 1,
+          "fingerprint": "0ee3787e320ce574",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entry": {
+          "count": 6,
+          "fingerprint": "c08acbfcb311544d",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/entryId": {
+          "count": 4,
+          "fingerprint": "c1db6d870f0ee52f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/eventId": {
+          "count": 1,
+          "fingerprint": "bdc74dc46b446882",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch": {
+          "count": 6,
+          "fingerprint": "95d9c0e5fb3c8ae6",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*": {
+          "count": 6,
+          "fingerprint": "b815529c01476df0",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/path": {
+          "count": 2,
+          "fingerprint": "a7cfaa7d1da3f81e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/patch/*/value": {
+          "count": 2,
+          "fingerprint": "166c1af53e06e33f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "aa31ff69b83339bb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/stats": {
+          "count": 10,
+          "fingerprint": "1de9562c7aa4d4ed",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turn": {
+          "count": 3,
+          "fingerprint": "4e9f3c8a67610885",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/turnId": {
+          "count": 10,
+          "fingerprint": "e174f4907931839a",
+          "level": "exact"
+        }
       },
       "flows/workspace-prompt": {
-        "/*/response/result/prompt/images/<list>/source/data": 1,
-        "/*/response/result/prompt/images/<list>/source/path": 1
+        "/*/response/result/prompt/images/<list>/source/data": {
+          "count": 1,
+          "fingerprint": "9fb0a46009a7d0e0",
+          "level": "exact"
+        },
+        "/*/response/result/prompt/images/<list>/source/path": {
+          "count": 1,
+          "fingerprint": "5e9a94f066f7335f",
+          "level": "exact"
+        }
       },
       "flows/worktree-reap": {
-        "/*/response/error": 6,
-        "/*/response/result": 6
+        "/*/response/error": {
+          "count": 6,
+          "fingerprint": "ff3f9e740d19323d",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 6,
+          "fingerprint": "7cefd7a62a4b0755",
+          "level": "exact"
+        }
       },
       "flows/worktree-reap-dirty": {
-        "/*/response/error": 4,
-        "/*/response/result": 4
+        "/*/response/error": {
+          "count": 4,
+          "fingerprint": "e5d26f8f135dfcab",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 4,
+          "fingerprint": "c6ce3f3df8ec8d6f",
+          "level": "exact"
+        }
       },
       "flows/worktree-reap-idle": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "eee6a4044b193dec",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "821c5dbf12fc98f2",
+          "level": "exact"
+        }
       },
       "frames/initialize-invalid": {
-        "/*/response/result/processId": 1
+        "/*/response/result/processId": {
+          "count": 1,
+          "fingerprint": "0478f65dedfd5ddb",
+          "level": "exact"
+        }
       },
       "frames/initialize-twice": {
-        "/*/response/result/processId": 1
+        "/*/response/result/processId": {
+          "count": 1,
+          "fingerprint": "b66d87b4d7680c3f",
+          "level": "exact"
+        }
       },
       "frames/initialize-with-capabilities": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/processId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "6c8359f4b77deef0",
+          "level": "exact"
+        },
+        "/*/response/result/processId": {
+          "count": 1,
+          "fingerprint": "b66d87b4d7680c3f",
+          "level": "exact"
+        }
       },
       "frames/request-before-initialize": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/processId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5fab44af74cd3c41",
+          "level": "exact"
+        },
+        "/*/response/result/processId": {
+          "count": 1,
+          "fingerprint": "1a9c95c9bd192c04",
+          "level": "exact"
+        }
       },
       "frames/request-before-initialized": {
-        "/*/response/result/processId": 1
+        "/*/response/result/processId": {
+          "count": 1,
+          "fingerprint": "b66d87b4d7680c3f",
+          "level": "exact"
+        }
       },
       "frames/string-id": {
-        "/*/response/result/continueSessionId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5c30e517c2f411da",
+          "level": "exact"
+        }
       },
       "probe/account/read/rooted": {
-        "/*/response/result/account/apiKey": 1,
-        "/*/response/result/account/budget": 1
+        "/*/response/result/account/apiKey": {
+          "count": 1,
+          "fingerprint": "1117744002d123c3",
+          "level": "exact"
+        },
+        "/*/response/result/account/budget": {
+          "count": 1,
+          "fingerprint": "6d6e1ec38ce3895b",
+          "level": "exact"
+        }
       },
       "probe/agents/list/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "3ce814f3dfaeedb7",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "21f4851dcd685de4",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "2d09f0d1ee114951",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "60ee74173ca2d3a2",
+          "level": "exact"
+        }
       },
       "probe/artifacts/list/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "6cc2b428c15b7b6c",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "1b99dbd260a55ccf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "13756bdba80cfbbe",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "c0f5cb375f0a6a49",
+          "level": "exact"
+        }
       },
       "probe/artifacts/list/rooted": {
-        "/*/response/error": 2,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "1f043dc2563366c0",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "1b99dbd260a55ccf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "13756bdba80cfbbe",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "97707a4b0ad77f5a",
+          "level": "exact"
+        }
       },
       "probe/artifacts/markViewed/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "3ee3bdbd7983c525",
+          "level": "exact"
+        }
       },
       "probe/artifacts/markViewed/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "0478e70aa1b79a8a",
+          "level": "exact"
+        }
       },
       "probe/artifacts/subscribe/bare": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "d361a50904ba3b77",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "4492c2127ec7e6a7",
+          "level": "exact"
+        }
       },
       "probe/artifacts/subscribe/rooted": {
-        "/*/response/error": 3,
-        "/*/response/result": 3
+        "/*/response/error": {
+          "count": 3,
+          "fingerprint": "ab53377b57898f1a",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 3,
+          "fingerprint": "8c132067542e8470",
+          "level": "exact"
+        }
       },
       "probe/artifacts/sync/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "9ace8ed3388d33dc",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "1b99dbd260a55ccf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "7ce607f1bdd69399",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "c0f5cb375f0a6a49",
+          "level": "exact"
+        }
       },
       "probe/artifacts/sync/rooted": {
-        "/*/response/error": 2,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "e5ec0bcbbcba25ae",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "1b99dbd260a55ccf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "7ce607f1bdd69399",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "97707a4b0ad77f5a",
+          "level": "exact"
+        }
       },
       "probe/config/effective/read/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "fc670fb4bf30a046",
+          "level": "exact"
+        }
       },
       "probe/config/effective/read/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "7474bf379b55aff3",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "fc670fb4bf30a046",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "b01caf4d1754872b",
+          "level": "exact"
+        }
+      },
+      "probe/config/fields/read/rooted": {
+        "/*/response/result/fields/<kinds>/*": {
+          "count": 50,
+          "fingerprint": "417a51ca62b0f206",
+          "level": "exact"
+        }
       },
       "probe/config/model/write/rooted": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
-        "/*/notifications/*/params/runtime/experimentalHarness": 1,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
-        "/*/response/result/reason": 1,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
-        "/*/response/result/runtime/config/activeModel/source": 1,
-        "/*/response/result/runtime/config/cursorBlink": 1,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
-        "/*/response/result/runtime/config/enableMouseCapture": 1,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/runtime/config/models/<list>/source": 1,
-        "/*/response/result/runtime/experimentalHarness": 1,
-        "/*/response/result/runtime/mcp/connectorError": 1,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/stats/modelCalls": 1,
-        "/*/response/result/runtime/tools/<list>/isCustom": 1
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bcc8dab072390f5c",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "dd333b02a47c8704",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "e4b271a0f01a0515",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "e85833ffc2574cce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "aa0bc17bed35fffb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "fde0d098c62f3d99",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "0fafb0083f7f4b09",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "8dc660d2328ab8ce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "9ec8e1ffc6c42e03",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "7d55c53d7a501ca9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "b32f4a0f3d61daa2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "8f8ffa8044c3c1ad",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ac6f8e5436edec9f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "81b6a2da9c12901f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "eeb9a5921e919662",
+          "level": "exact"
+        },
+        "/*/response/result/reason": {
+          "count": 1,
+          "fingerprint": "60d0585d9c4083ba",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "a0a4538d05bc10b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "e649ee3b3736acbb",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "f6eaf2a5b0900fcc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "9bb4c274c6af4b90",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "04d5e52dd2c174d2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "290b22db648ba588",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "061ca801cc8e1fdc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bf8d825281f8ad4a",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "f657468598c261d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "ef847813abb4a9b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "7e2da859dae0f131",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "5fb6c8d1d56d3b39",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "678bd7b846321317",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "62649b835f407c19",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "835ee0c144f77072",
+          "level": "exact"
+        }
       },
       "probe/config/read/bare": {
-        "/*/response/result/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/config/activeModel/maxContextLength": 1,
-        "/*/response/result/config/activeModel/source": 1,
-        "/*/response/result/config/cursorBlink": 1,
-        "/*/response/result/config/enableFileAutocomplete": 1,
-        "/*/response/result/config/enableMouseCapture": 1,
-        "/*/response/result/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/config/models/<list>/source": 1,
-        "/*/response/result/harnessSelectionSource": 1,
-        "/*/response/result/startupIssue": 1
+        "/*/response/result/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "3d300168a561f43f",
+          "level": "exact"
+        },
+        "/*/response/result/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "4f30c9cf69da27b0",
+          "level": "exact"
+        },
+        "/*/response/result/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "8be09f74ce30bb23",
+          "level": "exact"
+        },
+        "/*/response/result/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "0005a1aea6bfc74c",
+          "level": "exact"
+        },
+        "/*/response/result/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "f77a3965408f3576",
+          "level": "exact"
+        },
+        "/*/response/result/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "7ce041104d67d7d7",
+          "level": "exact"
+        },
+        "/*/response/result/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "5b91a2e6e5b99ae5",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "14d2f0bb839066a8",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "ca9ac22a39538fc9",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "078919c657374ced",
+          "level": "exact"
+        },
+        "/*/response/result/harnessSelectionSource": {
+          "count": 1,
+          "fingerprint": "4d8890e6186a1e8a",
+          "level": "exact"
+        },
+        "/*/response/result/startupIssue": {
+          "count": 1,
+          "fingerprint": "69ced60c5e7e58de",
+          "level": "exact"
+        }
       },
       "probe/config/read/rooted": {
-        "/*/response/result/config/activeModel/autoCompactThreshold": 2,
-        "/*/response/result/config/activeModel/maxContextLength": 2,
-        "/*/response/result/config/activeModel/source": 2,
-        "/*/response/result/config/cursorBlink": 2,
-        "/*/response/result/config/enableFileAutocomplete": 2,
-        "/*/response/result/config/enableMouseCapture": 2,
-        "/*/response/result/config/experimentalEnableLocalProjects": 2,
-        "/*/response/result/config/models/<list>/autoCompactThreshold": 2,
-        "/*/response/result/config/models/<list>/maxContextLength": 2,
-        "/*/response/result/config/models/<list>/source": 2,
-        "/*/response/result/harnessSelectionSource": 2,
-        "/*/response/result/startupIssue": 2
+        "/*/response/result/config/activeModel/autoCompactThreshold": {
+          "count": 2,
+          "fingerprint": "f7148f5adc475acc",
+          "level": "exact"
+        },
+        "/*/response/result/config/activeModel/maxContextLength": {
+          "count": 2,
+          "fingerprint": "20a321d7629cff02",
+          "level": "exact"
+        },
+        "/*/response/result/config/activeModel/source": {
+          "count": 2,
+          "fingerprint": "4bc01d4ef09afc19",
+          "level": "exact"
+        },
+        "/*/response/result/config/cursorBlink": {
+          "count": 2,
+          "fingerprint": "bc6d2a53f2244ac1",
+          "level": "exact"
+        },
+        "/*/response/result/config/enableFileAutocomplete": {
+          "count": 2,
+          "fingerprint": "403c372948316166",
+          "level": "exact"
+        },
+        "/*/response/result/config/enableMouseCapture": {
+          "count": 2,
+          "fingerprint": "2ab5837c8286a65c",
+          "level": "exact"
+        },
+        "/*/response/result/config/experimentalEnableLocalProjects": {
+          "count": 2,
+          "fingerprint": "202221bed1317e23",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/autoCompactThreshold": {
+          "count": 2,
+          "fingerprint": "6ac22cc52516380d",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/maxContextLength": {
+          "count": 2,
+          "fingerprint": "e06eb489378d5ff4",
+          "level": "exact"
+        },
+        "/*/response/result/config/models/<list>/source": {
+          "count": 2,
+          "fingerprint": "82f283df905d0a96",
+          "level": "exact"
+        },
+        "/*/response/result/harnessSelectionSource": {
+          "count": 2,
+          "fingerprint": "fa4a9343968888b0",
+          "level": "exact"
+        },
+        "/*/response/result/startupIssue": {
+          "count": 2,
+          "fingerprint": "27851328182f31c7",
+          "level": "exact"
+        }
       },
       "probe/config/reload/rooted": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
-        "/*/notifications/*/params/runtime/experimentalHarness": 1,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
-        "/*/response/result/runtime/config/activeModel/source": 1,
-        "/*/response/result/runtime/config/cursorBlink": 1,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
-        "/*/response/result/runtime/config/enableMouseCapture": 1,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/runtime/config/models/<list>/source": 1,
-        "/*/response/result/runtime/experimentalHarness": 1,
-        "/*/response/result/runtime/mcp/connectorError": 1,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/stats/modelCalls": 1,
-        "/*/response/result/runtime/tools/<list>/isCustom": 1
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bcc8dab072390f5c",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "dd333b02a47c8704",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "e4b271a0f01a0515",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "e85833ffc2574cce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "aa0bc17bed35fffb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "fde0d098c62f3d99",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "0fafb0083f7f4b09",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "8dc660d2328ab8ce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "9ec8e1ffc6c42e03",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "7d55c53d7a501ca9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "b32f4a0f3d61daa2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "8f8ffa8044c3c1ad",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ac6f8e5436edec9f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "81b6a2da9c12901f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "eeb9a5921e919662",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "a0a4538d05bc10b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "e649ee3b3736acbb",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "f6eaf2a5b0900fcc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "9bb4c274c6af4b90",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "04d5e52dd2c174d2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "290b22db648ba588",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "061ca801cc8e1fdc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bf8d825281f8ad4a",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "f657468598c261d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "ef847813abb4a9b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "7e2da859dae0f131",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "5fb6c8d1d56d3b39",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "678bd7b846321317",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "62649b835f407c19",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "835ee0c144f77072",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/connect/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "36ef3cd7ebe437ef",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/connect/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "8c224267a4c9ff59",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/read/bare": {
-        "/*/response/result/catalog/catalogRevision": 1,
-        "/*/response/result/privateConnectorsHidden": 1
+        "/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "be67cf41e4c9a2c2",
+          "level": "exact"
+        },
+        "/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ef99d8698deb4dc3",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/read/rooted": {
-        "/*/response/result/catalog/catalogRevision": 2,
-        "/*/response/result/privateConnectorsHidden": 2
+        "/*/response/result/catalog/catalogRevision": {
+          "count": 2,
+          "fingerprint": "4f368ab3d8b80e57",
+          "level": "exact"
+        },
+        "/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "9b0d68f287751302",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/refresh/bare": {
-        "/*/response/error": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "e674bf32bd57786a",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/connector_catalog/refresh/rooted": {
-        "/*/notifications/*": 1,
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c4c936504d940a39",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "d4a8b535d36d79a5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "e35e3b5405f35001",
+          "level": "exact"
+        }
       },
       "probe/imports/discover/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "5f406bd619849ff5",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "b0143a197a208ffa",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "63c471c80c5f1f11",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "c9bd2fc5a292a6f7",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/imports/discover/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "5f406bd619849ff5",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "31906ceb6c4850cf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "f9968fdbe2e14512",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "63cf5a2b8f8a30e5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/imports/read/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "f13f7e9d9c796fbb",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "b0143a197a208ffa",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "63c471c80c5f1f11",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "39d9f60f4ff79e81",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/imports/read/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "f13f7e9d9c796fbb",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "31906ceb6c4850cf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "f9968fdbe2e14512",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "e705aa874bab3ae7",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/imports/start/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "a3dd9e59b2706d13",
+          "level": "exact"
+        }
       },
       "probe/imports/start/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "6c875a7e41e7e233",
+          "level": "exact"
+        }
       },
       "probe/mcp/add/bare": {
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "8fe9d7f40c88296e",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "10eaa0c596b5c3bf",
+          "level": "exact"
+        }
       },
       "probe/mcp/add/rooted": {
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "448ef9e08dc76558",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "9a178eae17da7e4f",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "2fa89a68b08ed400",
+          "level": "exact"
+        }
       },
       "probe/mcp/read/rooted": {
-        "/*/response/result/mcp/connectorError": 1,
-        "/*/response/result/mcp/privateConnectorsHidden": 1
+        "/*/response/result/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "36da4775f4031962",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "f60a5387bb811e77",
+          "level": "exact"
+        }
       },
       "probe/mcp/refresh/rooted": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
-        "/*/notifications/*/params/runtime/experimentalHarness": 1,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
-        "/*/response/result/runtime/config/activeModel/source": 1,
-        "/*/response/result/runtime/config/cursorBlink": 1,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
-        "/*/response/result/runtime/config/enableMouseCapture": 1,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/runtime/config/models/<list>/source": 1,
-        "/*/response/result/runtime/experimentalHarness": 1,
-        "/*/response/result/runtime/mcp/connectorError": 1,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/stats/modelCalls": 1,
-        "/*/response/result/runtime/tools/<list>/isCustom": 1
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bcc8dab072390f5c",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "dd333b02a47c8704",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "e4b271a0f01a0515",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "e85833ffc2574cce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "aa0bc17bed35fffb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "fde0d098c62f3d99",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "0fafb0083f7f4b09",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "8dc660d2328ab8ce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "9ec8e1ffc6c42e03",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "7d55c53d7a501ca9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "b32f4a0f3d61daa2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "8f8ffa8044c3c1ad",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ac6f8e5436edec9f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "81b6a2da9c12901f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "eeb9a5921e919662",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "a0a4538d05bc10b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "e649ee3b3736acbb",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "f6eaf2a5b0900fcc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "9bb4c274c6af4b90",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "04d5e52dd2c174d2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "290b22db648ba588",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "061ca801cc8e1fdc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bf8d825281f8ad4a",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "f657468598c261d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "ef847813abb4a9b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "7e2da859dae0f131",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "5fb6c8d1d56d3b39",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "678bd7b846321317",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "62649b835f407c19",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "835ee0c144f77072",
+          "level": "exact"
+        }
       },
       "probe/mcp_catalog/add/bare": {
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "8fe9d7f40c88296e",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "10eaa0c596b5c3bf",
+          "level": "exact"
+        }
       },
       "probe/mcp_catalog/add/rooted": {
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "448ef9e08dc76558",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "9a178eae17da7e4f",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "2fa89a68b08ed400",
+          "level": "exact"
+        }
       },
       "probe/mcp_catalog/read/rooted": {
-        "/*/response/result/mcp/connectorError": 1,
-        "/*/response/result/mcp/privateConnectorsHidden": 1
+        "/*/response/result/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "36da4775f4031962",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "f60a5387bb811e77",
+          "level": "exact"
+        }
       },
       "probe/mcp_catalog/refresh/rooted": {
-        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
-        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
-        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
-        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
-        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
-        "/*/notifications/*/params/runtime/experimentalHarness": 1,
-        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
-        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
-        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
-        "/*/response/result/runtime/config/activeModel/source": 1,
-        "/*/response/result/runtime/config/cursorBlink": 1,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
-        "/*/response/result/runtime/config/enableMouseCapture": 1,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/runtime/config/models/<list>/source": 1,
-        "/*/response/result/runtime/experimentalHarness": 1,
-        "/*/response/result/runtime/mcp/connectorError": 1,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/stats/modelCalls": 1,
-        "/*/response/result/runtime/tools/<list>/isCustom": 1
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bcc8dab072390f5c",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "dd333b02a47c8704",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "e4b271a0f01a0515",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "e85833ffc2574cce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "aa0bc17bed35fffb",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "fde0d098c62f3d99",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "0fafb0083f7f4b09",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "8dc660d2328ab8ce",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "9ec8e1ffc6c42e03",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "7d55c53d7a501ca9",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "b32f4a0f3d61daa2",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "8f8ffa8044c3c1ad",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ac6f8e5436edec9f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "81b6a2da9c12901f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "eeb9a5921e919662",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "a0a4538d05bc10b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "e649ee3b3736acbb",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "f6eaf2a5b0900fcc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "9bb4c274c6af4b90",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "04d5e52dd2c174d2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "290b22db648ba588",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "061ca801cc8e1fdc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bf8d825281f8ad4a",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "f657468598c261d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "ef847813abb4a9b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "7e2da859dae0f131",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "5fb6c8d1d56d3b39",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "678bd7b846321317",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "62649b835f407c19",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "835ee0c144f77072",
+          "level": "exact"
+        }
       },
       "probe/platformCredentials/headers/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "ad9fcf3c13892140",
+          "level": "exact"
+        }
       },
       "probe/platformCredentials/headers/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "7ccc8007fa5abb9b",
+          "level": "exact"
+        }
       },
       "probe/plugin/reload/rooted": {
-        "/*/notifications/*": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c4c936504d940a39",
+          "level": "exact"
+        }
       },
       "probe/projects/create/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "4077b4a9d9c88e20",
+          "level": "exact"
+        }
       },
       "probe/projects/create/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "ba7253e513945ee4",
+          "level": "exact"
+        }
       },
       "probe/projects/list/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "169c2c53833f2924",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "b0143a197a208ffa",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "63c471c80c5f1f11",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "6b53906f6489d963",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/projects/list/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "169c2c53833f2924",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "31906ceb6c4850cf",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "f9968fdbe2e14512",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "6907f32a52c271b1",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/projects/remove/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "0fd398f60c2c874d",
+          "level": "exact"
+        }
       },
       "probe/projects/remove/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "35d9efffdba5aa19",
+          "level": "exact"
+        }
       },
       "probe/projects/rename/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 2,
+          "fingerprint": "10397e44b27ef340",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "58c118f1f4dec18e",
+          "level": "exact"
+        }
       },
       "probe/projects/rename/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "8c5513943aff9675",
+          "level": "exact"
+        }
       },
       "probe/providerAuth/read/rooted": {
-        "/*/response/result/auth/apiKeyEnvVar": 1,
-        "/*/response/result/auth/authKind": 1,
-        "/*/response/result/auth/envFilePath": 1,
-        "/*/response/result/auth/sources": 1
+        "/*/response/result/auth/apiKeyEnvVar": {
+          "count": 1,
+          "fingerprint": "4c536b00834cb2db",
+          "level": "exact"
+        },
+        "/*/response/result/auth/authKind": {
+          "count": 1,
+          "fingerprint": "24071e1517a25d0a",
+          "level": "exact"
+        },
+        "/*/response/result/auth/envFilePath": {
+          "count": 1,
+          "fingerprint": "156bf660820c42ab",
+          "level": "exact"
+        },
+        "/*/response/result/auth/sources": {
+          "count": 1,
+          "fingerprint": "3a4ff336b8257fd7",
+          "level": "exact"
+        }
       },
       "probe/review/state/rooted": {
-        "/*/response/error": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "58232284dabc372e",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "b01caf4d1754872b",
+          "level": "exact"
+        }
       },
       "probe/runtime/read/rooted": {
-        "/*/response/error": 1,
-        "/*/response/result": 1,
-        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
-        "/*/response/result/runtime/config/activeModel/source": 1,
-        "/*/response/result/runtime/config/cursorBlink": 1,
-        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
-        "/*/response/result/runtime/config/enableMouseCapture": 1,
-        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
-        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
-        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
-        "/*/response/result/runtime/config/models/<list>/source": 1,
-        "/*/response/result/runtime/experimentalHarness": 1,
-        "/*/response/result/runtime/mcp/connectorError": 1,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/stats/modelCalls": 1,
-        "/*/response/result/runtime/tools/<list>/isCustom": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "6a03faf0eb513960",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "c0f5cb375f0a6a49",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "a0a4538d05bc10b2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/maxContextLength": {
+          "count": 1,
+          "fingerprint": "e649ee3b3736acbb",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/activeModel/source": {
+          "count": 1,
+          "fingerprint": "f6eaf2a5b0900fcc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/cursorBlink": {
+          "count": 1,
+          "fingerprint": "9bb4c274c6af4b90",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableFileAutocomplete": {
+          "count": 1,
+          "fingerprint": "04d5e52dd2c174d2",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/enableMouseCapture": {
+          "count": 1,
+          "fingerprint": "290b22db648ba588",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": {
+          "count": 1,
+          "fingerprint": "061ca801cc8e1fdc",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": {
+          "count": 1,
+          "fingerprint": "bf8d825281f8ad4a",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": {
+          "count": 1,
+          "fingerprint": "f657468598c261d0",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/config/models/<list>/source": {
+          "count": 1,
+          "fingerprint": "ef847813abb4a9b1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "7e2da859dae0f131",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "5fb6c8d1d56d3b39",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "678bd7b846321317",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/stats/modelCalls": {
+          "count": 1,
+          "fingerprint": "62649b835f407c19",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/tools/<list>/isCustom": {
+          "count": 1,
+          "fingerprint": "835ee0c144f77072",
+          "level": "exact"
+        }
       },
       "probe/session/compact/rooted": {
-        "/*/notifications/*": 4,
-        "/*/response/error": 1,
-        "/*/response/result": 1
+        "/*/notifications/*": {
+          "count": 4,
+          "fingerprint": "49be88b4a417dab5",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "3ce814f3dfaeedb7",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "2be9a5369099a363",
+          "level": "exact"
+        }
       },
       "probe/session/context/read/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "ef0178bf5d96c8c9",
+          "level": "exact"
+        }
       },
       "probe/session/context/read/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "aa648dab41177b33",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "ef0178bf5d96c8c9",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "b01caf4d1754872b",
+          "level": "exact"
+        }
       },
       "probe/session/continue/bare": {
-        "/*/response/error/data": 1
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        }
       },
       "probe/session/continue/rooted": {
-        "/*/response/error/data": 1
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        }
       },
       "probe/session/history/clear/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "1bb9be6b2ce84c95",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "4943487f1f9a6592",
+          "level": "exact"
+        }
       },
       "probe/session/history/clear/rooted": {
-        "/*/notifications/*": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c4c936504d940a39",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "ab3b11ec3d6ea205",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "b299482e1ad80dda",
+          "level": "exact"
+        }
       },
       "probe/session/lease/subscribe/bare": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "9e30abd95e7c3b3c",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "4492c2127ec7e6a7",
+          "level": "exact"
+        }
       },
       "probe/session/lease/subscribe/rooted": {
-        "/*/response/error": 3,
-        "/*/response/result": 3
+        "/*/response/error": {
+          "count": 3,
+          "fingerprint": "513c3f61a6dfb686",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 3,
+          "fingerprint": "8c132067542e8470",
+          "level": "exact"
+        }
       },
       "probe/session/list/bare": {
-        "/*/response/result/continueSessionId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5c30e517c2f411da",
+          "level": "exact"
+        }
       },
       "probe/session/list/rooted": {
-        "/*/response/result/continueSessionId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5c30e517c2f411da",
+          "level": "exact"
+        }
       },
       "probe/session/read/rooted": {
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "b56642d9c728cdf9",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "ab3b11ec3d6ea205",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "b299482e1ad80dda",
+          "level": "exact"
+        }
       },
       "probe/session/ready/read/rooted": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "dd53a320d554be38",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "4492c2127ec7e6a7",
+          "level": "exact"
+        }
       },
       "probe/session/ready/wait/rooted": {
-        "/*/response/error": 2,
-        "/*/response/result": 2
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "03ff689047456700",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "4492c2127ec7e6a7",
+          "level": "exact"
+        }
       },
       "probe/session/resume/rooted": {
-        "/*/notifications/*": 1,
-        "/*/response/result/lastEventId": 1,
-        "/*/response/result/state/eventId": 1,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c4c936504d940a39",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "b56642d9c728cdf9",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "ab3b11ec3d6ea205",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "b299482e1ad80dda",
+          "level": "exact"
+        }
       },
       "probe/session/start/bare": {
-        "/*/notifications/*/method": 1,
-        "/*/notifications/*/params/runtime": 1,
-        "/*/notifications/*/params/sessionId": 1,
-        "/*/notifications/*/params/warning": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*/notifications/*/method": {
+          "count": 1,
+          "fingerprint": "4a3c85efb46ab8d7",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/runtime": {
+          "count": 1,
+          "fingerprint": "577576d9eaa9504f",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/sessionId": {
+          "count": 1,
+          "fingerprint": "55c9f78753d69775",
+          "level": "exact"
+        },
+        "/*/notifications/*/params/warning": {
+          "count": 1,
+          "fingerprint": "3dd7d853c00c653d",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "probe/session/start/rooted": {
-        "/*/response/error": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "1e693009add3a81b",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/interrupt/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "9ce38e3d5985495c",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/interrupt/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "07aca041ee48dcf0",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/read/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "1cc6e2346f11c541",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/read/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "ded08474156d02e2",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "1cc6e2346f11c541",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "b01caf4d1754872b",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/wait/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "f5888c44a5142d2f",
+          "level": "exact"
+        }
       },
       "probe/session/subagents/wait/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "2e533b7970f1eac7",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/abandon/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "758e6bfa335f289e",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/abandon/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "496e29816ded76f1",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/cancel/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "30c94883ac044f8e",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/cancel/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "5f9acda401412d00",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/save/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "5e1df4d0fc34f0a5",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/save/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "86387b041319196f",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/start/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "9199b063a6ed25c9",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/edit/start/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/data": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "2172db0d1049a276",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/read/rooted": {
-        "/*/response/error/code": 1
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "21f4851dcd685de4",
+          "level": "exact"
+        }
       },
       "probe/session/turn/queue/resume/rooted": {
-        "/*/response/error/code": 1
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "21f4851dcd685de4",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-cancel/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "3bbd83774f11206d",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-cancel/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "e6a837b199957511",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-clear/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "1eda160afd0b166c",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-clear/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "4af78d7993e47084",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-poll/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "a6be9ad880957bfc",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-poll/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "ab151a93b2828b3c",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-probe/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "ad5c2592f6a3ecaf",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-probe/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "f88dd73df0b2a2f5",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-start/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "77a5e557be10a47e",
+          "level": "exact"
+        }
       },
       "probe/setup/oidc-start/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "4be6285ed28a34aa",
+          "level": "exact"
+        }
       },
       "probe/setup/status/bare": {
-        "/*/response/result/activeCredentialSource": 1,
-        "/*/response/result/mistralActiveCredentialSource": 1,
-        "/*/response/result/mistralProvider": 1,
-        "/*/response/result/pinnedConsoleUrl": 1
+        "/*/response/result/activeCredentialSource": {
+          "count": 1,
+          "fingerprint": "02337854858022d3",
+          "level": "exact"
+        },
+        "/*/response/result/mistralActiveCredentialSource": {
+          "count": 1,
+          "fingerprint": "f7a49738593df34e",
+          "level": "exact"
+        },
+        "/*/response/result/mistralProvider": {
+          "count": 1,
+          "fingerprint": "06bc9fe397011968",
+          "level": "exact"
+        },
+        "/*/response/result/pinnedConsoleUrl": {
+          "count": 1,
+          "fingerprint": "140439cd8e35e1dc",
+          "level": "exact"
+        }
       },
       "probe/setup/status/rooted": {
-        "/*/response/result/activeCredentialSource": 1,
-        "/*/response/result/mistralActiveCredentialSource": 1,
-        "/*/response/result/mistralProvider": 1,
-        "/*/response/result/pinnedConsoleUrl": 1
+        "/*/response/result/activeCredentialSource": {
+          "count": 1,
+          "fingerprint": "02337854858022d3",
+          "level": "exact"
+        },
+        "/*/response/result/mistralActiveCredentialSource": {
+          "count": 1,
+          "fingerprint": "f7a49738593df34e",
+          "level": "exact"
+        },
+        "/*/response/result/mistralProvider": {
+          "count": 1,
+          "fingerprint": "06bc9fe397011968",
+          "level": "exact"
+        },
+        "/*/response/result/pinnedConsoleUrl": {
+          "count": 1,
+          "fingerprint": "140439cd8e35e1dc",
+          "level": "exact"
+        }
       },
       "probe/skills/installed/rooted": {
-        "/*/response/result/skills/<list>": 1
+        "/*/response/result/skills/<empty>": {
+          "count": 1,
+          "fingerprint": "d76b345f6b333662",
+          "level": "exact"
+        },
+        "/*/response/result/skills/<list>": {
+          "count": 1,
+          "fingerprint": "a4a12017befe3b32",
+          "level": "exact"
+        }
       },
       "probe/skills/list/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "2b83d0a523b39c74",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "fc74589a66b8a61b",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "179440d51c306a25",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/skills/local/delete/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "8503f05f04e8d9a8",
+          "level": "exact"
+        }
       },
       "probe/skills/local/delete/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "69a8465486381e53",
+          "level": "exact"
+        }
       },
       "probe/skills/local/list/bare": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "ceea791808768991",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "b0143a197a208ffa",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "44687bbad291b9c5",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/skills/local/list/rooted": {
-        "/*/response/error": 1,
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2,
-        "/*/response/result": 1
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "ceea791808768991",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "31906ceb6c4850cf",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "374c56549228c454",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "31e09a171de2b312",
+          "level": "exact"
+        }
       },
       "probe/skills/local/read/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "cc3ff74697f3e7fe",
+          "level": "exact"
+        }
       },
       "probe/skills/local/read/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "0e77728f7a96620b",
+          "level": "exact"
+        }
       },
       "probe/skills/local/setEnabled/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "1d37048b79e7d591",
+          "level": "exact"
+        }
       },
       "probe/skills/local/setEnabled/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "11c60d59500eb1c5",
+          "level": "exact"
+        }
       },
       "probe/skills/local/write/bare": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "42ec10e72c4aeb60",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 2,
+          "fingerprint": "8b51827e63fcb0cc",
+          "level": "exact"
+        }
       },
       "probe/skills/local/write/rooted": {
-        "/*/response/error/code": 3,
-        "/*/response/error/message": 3
+        "/*/response/error/code": {
+          "count": 3,
+          "fingerprint": "1c56a4cd4cd2b1ee",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 3,
+          "fingerprint": "21678931127f479d",
+          "level": "exact"
+        }
       }
     }
   }

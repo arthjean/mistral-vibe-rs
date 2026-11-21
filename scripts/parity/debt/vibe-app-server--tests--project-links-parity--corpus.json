@@ -1,45 +1,129 @@
 {
   "corpus": "crates/vibe-app-server/tests/project-links-parity/corpus.json",
   "measuredAgainst": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "project links parity:": {
       "create/store-fails": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/store/text/*": 7
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "c700b2e8818c2cfa",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "a27298f7ce0fb112",
+          "level": "exact"
+        },
+        "/steps/*/store/text/*": {
+          "count": 7,
+          "fingerprint": "45f0f49e0b782880",
+          "level": "exact"
+        }
       },
       "link/store-fails": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/store/text/*": 7
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "c700b2e8818c2cfa",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "a27298f7ce0fb112",
+          "level": "exact"
+        },
+        "/steps/*/store/text/*": {
+          "count": 7,
+          "fingerprint": "45f0f49e0b782880",
+          "level": "exact"
+        }
       },
       "picker/stale-clear-fails": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/store/text/*": 8
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "c700b2e8818c2cfa",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "a27298f7ce0fb112",
+          "level": "exact"
+        },
+        "/steps/*/store/text/*": {
+          "count": 8,
+          "fingerprint": "c6b1d00497e00f95",
+          "level": "exact"
+        }
       },
       "resolve/inspect-stale-clear-fails": {
-        "/steps/*/response/result/staleLinkClearFailed": 1,
-        "/steps/*/response/result/staleLinkCleared": 1,
-        "/steps/*/store/text/*": 8
+        "/steps/*/response/result/staleLinkClearFailed": {
+          "count": 1,
+          "fingerprint": "8895efd0e2b3e3bc",
+          "level": "exact"
+        },
+        "/steps/*/response/result/staleLinkCleared": {
+          "count": 1,
+          "fingerprint": "b1888cd083b996ca",
+          "level": "exact"
+        },
+        "/steps/*/store/text/*": {
+          "count": 8,
+          "fingerprint": "59b60bd8f8b22c96",
+          "level": "exact"
+        }
       },
       "save/read-only-store": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "c700b2e8818c2cfa",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "a27298f7ce0fb112",
+          "level": "exact"
+        }
       },
       "store/read-only-store": {
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/staleLinkClearFailed": 1,
-        "/steps/*/response/result/staleLinkCleared": 1,
-        "/steps/*/store/text/*": 14
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "e602124e443de4fb",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "5a5b16033aa183da",
+          "level": "exact"
+        },
+        "/steps/*/response/result/staleLinkClearFailed": {
+          "count": 1,
+          "fingerprint": "8895efd0e2b3e3bc",
+          "level": "exact"
+        },
+        "/steps/*/response/result/staleLinkCleared": {
+          "count": 1,
+          "fingerprint": "b1888cd083b996ca",
+          "level": "exact"
+        },
+        "/steps/*/store/text/*": {
+          "count": 14,
+          "fingerprint": "002d61d80874ee0b",
+          "level": "exact"
+        }
       },
       "unlink/stale-store-fails": {
-        "/steps/*/store/text/*": 7
+        "/steps/*/store/text/*": {
+          "count": 7,
+          "fingerprint": "655e3a0bc84ec5f1",
+          "level": "exact"
+        }
       },
       "unlink/store-fails": {
-        "/steps/*/store/text/*": 7
+        "/steps/*/store/text/*": {
+          "count": 7,
+          "fingerprint": "363a0c8f6d07ba71",
+          "level": "exact"
+        }
       }
     }
   }

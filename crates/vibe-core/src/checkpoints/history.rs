@@ -189,9 +189,9 @@ fn is_opaque_change(before: &FileState, after: &FileState) -> bool {
     if !after.exists() {
         return true;
     }
-    // An existence toggle with no textual difference, such as creating an empty
-    // file, has no line hunk to show a reviewer, so the toggle itself is the
-    // reviewable unit.
+    // When a file only appears or disappears without any text change (an empty
+    // file being created, say), no line hunk exists to review, so the review
+    // covers the appearance or disappearance itself.
     before.exists() != after.exists() && before_lines == after_lines
 }
 
@@ -435,9 +435,9 @@ impl<'a> History<'a> {
         } else {
             vec![None; before_lines.len()]
         };
-        // A text edit written on top of an applied whole-file barrier depends on
-        // it, so reverting the barrier drags the edit rather than resurrecting a
-        // state that never existed.
+        // Text edits made after a whole-file barrier was applied rely on it:
+        // undoing the barrier takes those edits along instead of reviving a file
+        // content that was never real.
         let barriers = self.applied_barriers(path, &applied);
 
         let mut deps = BTreeMap::new();

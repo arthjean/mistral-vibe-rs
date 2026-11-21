@@ -16,7 +16,7 @@ const INPLACE_LIMIT: usize = 500;
 /// Reference `rewind_fork`'s `history_limit`.
 const FORK_LIMIT: usize = 200;
 
-/// The user message a rewind is anchored on.
+/// The user message that anchors a rewind.
 struct Anchor {
     /// Reference `PublicMessageEntry.text`.
     text: String,

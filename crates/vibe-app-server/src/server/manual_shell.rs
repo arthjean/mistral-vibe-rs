@@ -223,7 +223,7 @@ pub(super) fn resolve_workspace_cwd(
         return Err(ProtocolFault::plain(
             ProtocolErrorCode::Forbidden,
             format!(
-                "Shell working directory is outside the workspace: {}",
+                "The shell's working directory lies outside the workspace: {}",
                 cwd.display()
             ),
         ));

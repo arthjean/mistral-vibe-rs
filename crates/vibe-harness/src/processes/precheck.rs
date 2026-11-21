@@ -41,7 +41,7 @@ pub fn precheck(operation: Operation, arguments: &Value, workspace: &Path) -> Op
                     tool,
                     "cwd",
                     "invalid_working_directory",
-                    "Working directory must exist and be a directory",
+                    "The working directory has to be an existing directory",
                 ));
             }
             for (key, value) in arguments["env"].as_object().into_iter().flatten() {

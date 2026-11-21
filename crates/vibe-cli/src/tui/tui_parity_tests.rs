@@ -664,12 +664,12 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
     let proxy = proxy_overlay(&serde_json::json!({
         "values": {"HTTP_PROXY": "https://proxy.example", "NO_PROXY": "localhost"},
         "descriptions": {
-            "HTTP_PROXY": "Proxy URL for HTTP requests",
-            "HTTPS_PROXY": "Proxy URL for HTTPS requests",
-            "ALL_PROXY": "Proxy URL for all requests (fallback)",
-            "NO_PROXY": "Comma-separated list of hosts to bypass proxy",
-            "SSL_CERT_FILE": "Path to custom SSL certificate file",
-            "SSL_CERT_DIR": "Path to directory containing SSL certificates"
+            "HTTP_PROXY": "plain proxy",
+            "HTTPS_PROXY": "secure proxy",
+            "ALL_PROXY": "fallback proxy",
+            "NO_PROXY": "hosts that skip the proxy",
+            "SSL_CERT_FILE": "certificate bundle",
+            "SSL_CERT_DIR": "certificate folder"
         }
     }));
     assert_eq!(proxy.items.len(), 6);

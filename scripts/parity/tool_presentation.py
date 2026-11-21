@@ -84,8 +84,9 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from inprocess import SocketGuard
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 from tool_presentation_cases import scenarios
 
 SCHEMA_VERSION = 3
@@ -321,7 +322,7 @@ def parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument(
         "--check",
         action="store_true",

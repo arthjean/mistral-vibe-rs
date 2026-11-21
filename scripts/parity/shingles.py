@@ -403,15 +403,29 @@ def layer_file(commit: str) -> Path:
     return LICENSING / f"third-party-{commit[:12]}.json"
 
 
+def lockfile_digest(root: Path) -> str:
+    """The SHA-256 of the attested environment's ``source/uv.lock`` with its
+    line endings read as ``\\n``: Git for Windows exports a tree with CRLF
+    endings where ``core.autocrlf`` is set, as on the hosted runners, and the
+    lockfile is the same one."""
+
+    return hashlib.sha256((root / "source" / "uv.lock").read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def layer(
-    commit: str, attestation: dict[str, Any], subtracted: dict[int, list[str]], read: list[str]
+    commit: str,
+    attestation: dict[str, Any],
+    subtracted: dict[int, list[str]],
+    read: list[str],
+    lockfile: str,
 ) -> dict[str, Any]:
-    """The third-party layer of ``commit``, as the guard reads it."""
+    """The third-party layer of ``commit``, as the guard reads it, over the
+    lockfile whose :func:`lockfile_digest` is ``lockfile``."""
 
     return {
         "schemaVersion": LAYER_SCHEMA,
         "commit": commit,
-        "uvLockSha256": attestation["uvLockSha256"],
+        "uvLockSha256": lockfile,
         "measuredOn": {"platform": attestation["platform"], "python": attestation["python"]},
         "distributions": read,
         "digests": {f"{value:016x}": labels for value, labels in subtracted.items()},

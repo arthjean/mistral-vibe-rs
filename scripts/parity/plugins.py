@@ -13,9 +13,9 @@ two crates.
 over the trees ``crates/vibe-core/tests/plugins-parity/fixtures.json`` holds:
 native Agent Plugins packages with and without the Vibe extension, and the
 Claude Code, Codex, Kimi Code and OpenCode formats the adapters translate. The
-summary per case keeps every plugin's identity and digests, its skills, MCP
-servers, hooks, knowledge, agents, libraries and connectors, what
-materialization stages, and each diagnostic's code, severity, fatality,
+summary per case keeps every plugin's identity and digests, the components it
+declares (agents, connectors, hooks, knowledge, libraries, MCP servers and
+skills), what materialization stages, and each diagnostic's code, severity, fatality,
 component and file. Diagnostic messages are left out: the port writes its own
 prose for them. ``crates/vibe-core/tests/plugins_parity_tests.rs`` replays it.
 
@@ -36,7 +36,9 @@ local port, so the connector bootstrap a unified session fetches fails with
 the same transport error on every host rather than reaching the network.
 
 Normalization replaces every absolute path with a placeholder for the root it
-sits under, reduces a server-authored diagnostic message to ``<prose>``, and
+sits under, reduces a server-authored diagnostic message to ``<prose>``,
+records the message of an error answer as its length in code points and its
+SHA-256 (the replay compares that digest under the error's code and data), and
 records a skill prompt as a byte length and a SHA-256. The shipped ``vibe``
 plugin is this port's own text, so its content digest, its checkout and its
 skills' descriptions and prompts are folded to placeholders on both sides.
@@ -74,9 +76,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reexecute_pinned, reference_command, require_pin  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -113,8 +116,9 @@ api_key_env_var = ""
 
 
 def digest(text: str) -> dict[str, Any]:
-    encoded = text.encode("utf-8")
-    return {"len": len(encoded), "sha256": hashlib.sha256(encoded).hexdigest()}
+    """The one digest shape (`vibe_core::parity::replay::digest`): the length
+    in code points under `prose` and the SHA-256 of the UTF-8 bytes."""
+    return {"prose": len(text), "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
 
 
 # --------------------------------------------------------------------------
@@ -712,7 +716,19 @@ def normalize_server(run: dict[str, Any], reference_root: str | None) -> list[An
     steps = json.loads(text)
     for step in steps:
         fold(step)
+        digest_refusal(step)
     return steps
+
+
+def digest_refusal(step: dict[str, Any]) -> None:
+    """An error answer's message as a prose digest: the server wrote it, and the
+    code and data beside it are what a client acts on."""
+    answer = step.get("answer")
+    if step.get("ok") is not False or not isinstance(answer, dict):
+        return
+    text = answer.get("message")
+    if isinstance(text, str):
+        answer["message"] = digest(text)
 
 
 def fold(value: Any) -> Any:
@@ -796,7 +812,7 @@ def parse_arguments() -> argparse.Namespace:
         help="the MCP server a plugin finds on PATH",
     )
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument(
         "--check", action="store_true", help="compare with the committed corpus, write nothing"
     )

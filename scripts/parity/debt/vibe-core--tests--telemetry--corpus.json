@@ -1,74 +1,202 @@
 {
   "corpus": "crates/vibe-core/tests/telemetry/corpus.json",
-  "measuredAgainst": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94",
-  "schemaVersion": 1,
+  "measuredAgainst": "f54849f95e5cd077639b6c4a32dea2af723c3820775dfbd251dfd3d8b52c148c",
+  "schemaVersion": 2,
   "tallies": {
     "telemetry parity:": {
       "model-call-span-raising-a-backend-error": {
-        "/spans/statusDescription": 1
+        "/spans/statusDescription": {
+          "count": 1,
+          "fingerprint": "267a2a8eccce7a11",
+          "level": "exact"
+        }
       },
       "model-call-span-raising-a-backend-error-without-a-status": {
-        "/spans/statusDescription": 1
+        "/spans/statusDescription": {
+          "count": 1,
+          "fingerprint": "28c5b9ce35a4c4dd",
+          "level": "exact"
+        }
       },
       "model-call-span-wrapping-a-backend-error": {
-        "/spans/statusDescription": 1
+        "/spans/statusDescription": {
+          "count": 1,
+          "fingerprint": "9d5a37cea89cc9fb",
+          "level": "exact"
+        }
       },
       "vibe.artifact_created": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.artifact_detected": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.artifact_detection_failed": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.artifact_mark_viewed": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.artifact_sync_failed": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.artifact_synced": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.new_session": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventPayloads/propertyTypes": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "5908ceb763700026",
+          "level": "exact"
+        },
+        "/eventPayloads/propertyTypes": {
+          "count": 1,
+          "fingerprint": "bb8a3ff290e1aed0",
+          "level": "exact"
+        }
       },
       "vibe.onboarding_sign_in.done": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.onboarding_sign_in.started": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.session_branched": {
-        "/eventPayloads/propertyKeys": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "8e29139d0b3c3427",
+          "level": "exact"
+        }
       },
       "vibe.tool_call.detected": {
-        "/eventPayloads/correlated": 1,
-        "/eventPayloads/propertyKeys": 1,
-        "/eventPayloads/propertyTypes": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/correlated": {
+          "count": 1,
+          "fingerprint": "b97842052765f83c",
+          "level": "exact"
+        },
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventPayloads/propertyTypes": {
+          "count": 1,
+          "fingerprint": "8ea7d4d6bcef1377",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.tool_call_finished": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventPayloads/propertyTypes": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "bfca1b33ab7ce7dc",
+          "level": "exact"
+        },
+        "/eventPayloads/propertyTypes": {
+          "count": 1,
+          "fingerprint": "1344c9b80d31b9b3",
+          "level": "exact"
+        }
       },
       "vibe.tool_classification": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       },
       "vibe.worktree.created": {
-        "/eventPayloads/propertyKeys": 1,
-        "/eventVocabulary/published": 1
+        "/eventPayloads/propertyKeys": {
+          "count": 1,
+          "fingerprint": "489fcf826bb17b8d",
+          "level": "exact"
+        },
+        "/eventVocabulary/published": {
+          "count": 1,
+          "fingerprint": "00f5c62c35216e86",
+          "level": "exact"
+        }
       }
     }
   }

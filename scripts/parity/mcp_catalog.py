@@ -48,16 +48,19 @@ import tempfile
 import threading
 import time
 import tomllib
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -129,7 +132,7 @@ def free_port() -> int:
 # Scripted MCP servers
 # --------------------------------------------------------------------------
 
-TOOLS = [
+TOOLS: list[dict[str, Any]] = [
     {"name": "search", "description": "Search the docs.\nMatches titles and bodies.", "inputSchema": {"type": "object"}},
     {"name": "fetch", "description": "Fetch one page", "inputSchema": {"type": "object"}},
 ]
@@ -188,7 +191,7 @@ class Fixture:
             time.sleep(0.02)
         self.base = f"http://{port_file.read_text(encoding='utf-8').strip()}"
 
-    def requests(self) -> list[str]:
+    def requests(self) -> list[list[Any]]:
         if not self.log.exists():
             return []
         lines = [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines() if line]
@@ -393,7 +396,7 @@ class Run:
             except json.JSONDecodeError:
                 value = secret
             if isinstance(value, dict) and value.get("expires_at") is not None:
-                value["expires_at"] = "<time>"
+                value["expires_at"] = blackbox.time_token(value["expires_at"])
             observed[account] = value
         return observed
 
@@ -414,17 +417,17 @@ class Run:
                     observed = self.collect(identifier)
                     for message in observed:
                         self.learn(message)
-                    response = next((m for m in observed if "method" not in m and m.get("id") == identifier), {})
+                    answer = next((m for m in observed if "method" not in m and m.get("id") == identifier), {})
                     # What a start publishes about MCP races the start itself in
                     # the reference: a source discovered before the session is
                     # attached raises its `mcp_catalog/authRequired` into no
                     # connection. Only whether the start succeeded is kept, and
                     # the state it left is read by a later step.
-                    started: dict[str, Any] = {"ok": "result" in response}
-                    if "error" in response:
-                        started["error"] = response["error"]
+                    started: dict[str, Any] = {"ok": "result" in answer}
+                    if "error" in answer:
+                        started["error"] = answer["error"]
                     if os.environ.get("VIBE_CATALOG_ORACLE_DEBUG"):
-                        print(json.dumps(response)[:3000], file=sys.stderr)
+                        print(json.dumps(answer)[:3000], file=sys.stderr)
                     steps.append({"start": started})
                     continue
                 if "config" in step:
@@ -546,8 +549,8 @@ class Normalizer:
             return {name: self.value(item, name) for name, item in value.items()}
         if isinstance(value, list):
             return [self.value(item, key) for item in value]
-        if key in TIME_KEYS and value is not None and not isinstance(value, bool):
-            return "<time>"
+        if key in TIME_KEYS:
+            return blackbox.time_token(value)
         if isinstance(value, int) and not isinstance(value, bool) and str(value) in self.redirects:
             return self.redirects[str(value)]
         if not isinstance(value, str):
@@ -602,7 +605,7 @@ def send(method: str, **params: Any) -> dict[str, Any]:
 
 CONFIG = {"config": True}
 KEYRING = {"keyring": True}
-START = {"start": {}}
+START: dict[str, Any] = {"start": {}}
 
 OPEN_SERVER = '''
 [[mcp_servers]]
@@ -894,6 +897,21 @@ def build_fixture() -> Path:
     raise OracleError("cargo built no vibe-oauth-script-fixture executable")
 
 
+def renormalize(scenario: dict[str, Any], raw: dict[str, Any]) -> Any:
+    """The normalization of a raw capture (see `capture_scenario`), as
+    `--renormalize` runs it."""
+    root = Path(raw["root"])
+    run = SimpleNamespace(
+        root=root,
+        world=SimpleNamespace(
+            workspace=root / "workspace", vibe_home=root / "vibe-home", home=root / "home"),
+        sessions=raw["sessions"],
+        redirects=raw["redirects"],
+        fixtures={name: SimpleNamespace(base=base) for name, base in raw["bases"].items()},
+    )
+    return Normalizer(scenario, run).value(copy.deepcopy(raw["steps"]))  # type: ignore[arg-type]
+
+
 def capture_scenario(scenario: dict[str, Any], command: list[str], dialect: str, fixture: Path, quiet: float, raw: bool) -> dict[str, Any]:
     run = Run(scenario, command, dialect, fixture, quiet)
     try:
@@ -901,7 +919,15 @@ def capture_scenario(scenario: dict[str, Any], command: list[str], dialect: str,
         normalizer = Normalizer(scenario, run)
         entry = {"name": scenario["name"], "scenario": scenario, "observed": normalizer.value(copy.deepcopy(steps))}
         if raw:
-            entry["raw"] = steps
+            # The steps and what the normalizer reads of the run, so
+            # `--renormalize` can normalize them again.
+            entry["raw"] = {
+                "steps": steps,
+                "root": str(run.root),
+                "sessions": run.sessions,
+                "redirects": run.redirects,
+                "bases": {name: fixture.base for name, fixture in run.fixtures.items()},
+            }
         return entry
     finally:
         run.close()
@@ -910,7 +936,7 @@ def capture_scenario(scenario: dict[str, Any], command: list[str], dialect: str,
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument("--server", type=Path, default=None, help="drive this port's stdio fixture instead")
     parser.add_argument("--fixture", type=Path, default=None, help="the vibe-oauth-script-fixture binary")
     parser.add_argument("--output", type=Path, default=None)
@@ -918,11 +944,15 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--raw", action="store_true")
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, renormalize, 'mcp_catalog')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         fixture = (arguments.fixture or build_fixture()).resolve()

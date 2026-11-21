@@ -114,9 +114,9 @@ impl StateMap {
     /// Records `state` for `path` unless the path is already recorded, and
     /// answers whether it was recorded now.
     ///
-    /// The first touch in a turn owns that turn's pre-edit state: a later tool
-    /// writing the same file is building on the first one's output, not on the
-    /// state the turn started from.
+    /// Whichever tool touches a file first in a turn fixes its before-state for
+    /// that turn: any later write to the file starts from the earlier tool's
+    /// result, not from how the file looked when the turn opened.
     pub(super) fn insert_if_absent(&mut self, path: &str, state: FileState) -> bool {
         if self.contains(path) {
             return false;

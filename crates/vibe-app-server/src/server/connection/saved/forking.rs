@@ -40,7 +40,7 @@ impl ServerConnection {
         if !attach && !logging_enabled {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
-                "Detached forks require session logging to be enabled",
+                "A detached fork needs session logging turned on",
             ));
         }
         let workspace = &self.server.workspace;

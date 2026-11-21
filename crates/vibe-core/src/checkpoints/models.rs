@@ -258,8 +258,8 @@ pub enum HunkSide {
 /// One pending change located in a rendered diff, with what a control pinned
 /// there would decide.
 ///
-/// `line` is zero-based and points at the block's last line, so an inline
-/// control renders after the whole change rather than inside it. `regions` is
+/// `line` counts from zero and targets the final line of the block, placing an
+/// inline control below the full change instead of within it. `regions` is
 /// the full dependency component, so accepting one anchor never strands a hunk
 /// it was built on. `review/hunks` publishes it as it is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

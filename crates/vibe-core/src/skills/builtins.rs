@@ -48,10 +48,11 @@ fn vibe() -> SkillDefinition {
                       name (this CLI, this assistant, you), wants to inspect or change their \
                       setup, or asks why the agent behaved the way it did. It covers the Vibe \
                       home and `VIBE_HOME`, configuration files and their precedence, `VIBE_*` \
-                      and `LOG_*` environment variables, models and providers, agents and \
-                      subagents, skills, tools and the permission model, every slash command \
-                      and CLI flag, hooks, MCP servers, connectors, trusted folders, `@` file \
-                      mentions, logs, themes and voice. When unsure whether a command, flag or \
+                      and `LOG_*` environment variables, providers with their models, agents \
+                      with their subagents, skills, the tools and how permissions gate them, \
+                      all slash commands and command-line flags, hooks, connectors, MCP \
+                      servers, trusted folders, `@` file mentions, logs, themes and voice. \
+                      When unsure whether a command, flag or \
                       setting exists, load this skill instead of guessing."
             .to_owned(),
         license: None,

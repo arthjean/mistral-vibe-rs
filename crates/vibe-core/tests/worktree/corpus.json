@@ -642,8 +642,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:28f7e41a62972e403791b87a4d3528dd",
-          "length": 91
+          "prose": 91,
+          "sha256": "28f7e41a62972e403791b87a4d3528ddd9bbf149662e3c151be4524e64cd1a36"
         },
         "outcome": "error",
         "residue": {
@@ -665,8 +665,8 @@
       "observed": {
         "errorClass": "GitRepositoryNotFoundError",
         "message": {
-          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
-          "length": 36
+          "prose": 36,
+          "sha256": "5b250b4a30e89b18ff2e1e9cdade1cd8c95258450036a7c5813f372c1448bda7"
         },
         "outcome": "error",
         "residue": {
@@ -688,8 +688,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:89165357f51c82f8d5a63e2b7deb19c1",
-          "length": 71
+          "prose": 71,
+          "sha256": "89165357f51c82f8d5a63e2b7deb19c1714f0c0d307f02c95393ba8dc098038f"
         },
         "outcome": "error",
         "residue": {
@@ -711,8 +711,8 @@
       "observed": {
         "errorClass": "GitError",
         "message": {
-          "described": "sha256:01671177770247ee8603b8a5564538c2",
-          "length": 26
+          "prose": 26,
+          "sha256": "01671177770247ee8603b8a5564538c24974af966ddbe0b323fe0f30d711d305"
         },
         "outcome": "error",
         "residue": {
@@ -734,8 +734,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:2e4bcb0687ec765c71adaecf3071a409",
-          "length": 85
+          "prose": 85,
+          "sha256": "2e4bcb0687ec765c71adaecf3071a4091c579cbe029338327d833eb010fd78f4"
         },
         "outcome": "error",
         "residue": {
@@ -757,8 +757,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:cee90a3b17870aba0f1fb9fd9afab9a2",
-          "length": 97
+          "prose": 97,
+          "sha256": "cee90a3b17870aba0f1fb9fd9afab9a23eaa662e70893507bf5fb9d40848b9f8"
         },
         "outcome": "error",
         "residue": {
@@ -780,8 +780,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:2e4bcb0687ec765c71adaecf3071a409",
-          "length": 85
+          "prose": 85,
+          "sha256": "2e4bcb0687ec765c71adaecf3071a4091c579cbe029338327d833eb010fd78f4"
         },
         "outcome": "error",
         "residue": {
@@ -859,8 +859,8 @@
       "observed": {
         "errorClass": "GitError",
         "message": {
-          "described": "sha256:efc84bba89a2d317c7fafab02c80acb1",
-          "length": 92
+          "prose": 92,
+          "sha256": "efc84bba89a2d317c7fafab02c80acb1a894f1c57c5bd76b55d13d5506b64f86"
         },
         "outcome": "error",
         "residue": {
@@ -904,8 +904,8 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:31e3e828864d2c00e54f15dcdd17be78",
-            "length": 19
+            "prose": 19,
+            "sha256": "31e3e828864d2c00e54f15dcdd17be78a191ec3f41d38ebf1ab41c22d01e11af"
           }
         ]
       },
@@ -928,8 +928,8 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:58f592fe9ad4e9071b207336c06ba70c",
-            "length": 15
+            "prose": 15,
+            "sha256": "58f592fe9ad4e9071b207336c06ba70caeebe205af516aeece557dad5fce39a7"
           }
         ]
       },
@@ -953,12 +953,12 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:31e3e828864d2c00e54f15dcdd17be78",
-            "length": 19
+            "prose": 19,
+            "sha256": "31e3e828864d2c00e54f15dcdd17be78a191ec3f41d38ebf1ab41c22d01e11af"
           },
           {
-            "described": "sha256:58f592fe9ad4e9071b207336c06ba70c",
-            "length": 15
+            "prose": 15,
+            "sha256": "58f592fe9ad4e9071b207336c06ba70caeebe205af516aeece557dad5fce39a7"
           }
         ]
       },
@@ -982,8 +982,8 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:b94cb46caf0e4ef7ba4a341fa9178ca8",
-            "length": 34
+            "prose": 34,
+            "sha256": "b94cb46caf0e4ef7ba4a341fa9178ca843c1f5d7c8f3303fff80325e1f36018a"
           }
         ]
       },
@@ -1009,8 +1009,8 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:24569d70014400fb4fcdc623c80698fe",
-            "length": 35
+            "prose": 35,
+            "sha256": "24569d70014400fb4fcdc623c80698fec54e0c37e63cf360ae2bd05503e189bc"
           }
         ]
       },
@@ -1035,8 +1035,8 @@
         "outcome": "inspected",
         "reasons": [
           {
-            "described": "sha256:b94cb46caf0e4ef7ba4a341fa9178ca8",
-            "length": 34
+            "prose": 34,
+            "sha256": "b94cb46caf0e4ef7ba4a341fa9178ca843c1f5d7c8f3303fff80325e1f36018a"
           }
         ]
       },
@@ -1117,8 +1117,8 @@
       "observed": {
         "errorClass": "GitRepositoryNotFoundError",
         "message": {
-          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
-          "length": 36
+          "prose": 36,
+          "sha256": "5b250b4a30e89b18ff2e1e9cdade1cd8c95258450036a7c5813f372c1448bda7"
         },
         "outcome": "error"
       },
@@ -1173,8 +1173,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:10ca1099f8cb9bcd6700479cf079f5b6",
-          "length": 64
+          "prose": 64,
+          "sha256": "10ca1099f8cb9bcd6700479cf079f5b68c16c5581f346b286f88b900c8765bf7"
         },
         "outcome": "error"
       },
@@ -1190,8 +1190,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:0b509f80e437216ac1a6dbb5cffdc4ac",
-          "length": 54
+          "prose": 54,
+          "sha256": "0b509f80e437216ac1a6dbb5cffdc4acb8b91259e7935301202f68874c8c6838"
         },
         "outcome": "error"
       },
@@ -1207,8 +1207,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:3aa76e1055141ae6492ca2c11683b343",
-          "length": 71
+          "prose": 71,
+          "sha256": "3aa76e1055141ae6492ca2c11683b3436d5a613fc5c854188686b282594f2bf3"
         },
         "outcome": "error"
       },
@@ -1224,8 +1224,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:872b3da96f9c6ba7a75dff59bd5b7ad4",
-          "length": 88
+          "prose": 88,
+          "sha256": "872b3da96f9c6ba7a75dff59bd5b7ad460237a2c162396e01795266ebf4d16fc"
         },
         "outcome": "error"
       },
@@ -1241,8 +1241,8 @@
       "observed": {
         "errorClass": "WorktreeError",
         "message": {
-          "described": "sha256:ab0476e37fd272a4450936fdbff2764d",
-          "length": 71
+          "prose": 71,
+          "sha256": "ab0476e37fd272a4450936fdbff2764d846ece3a7b73f3dbaf7f297a22dd4077"
         },
         "outcome": "error"
       },
@@ -2350,8 +2350,8 @@
           "root": "repo"
         },
         "message": {
-          "described": "sha256:e531bd3eb38bf0fe8b44b9d3c97ed642",
-          "length": 96
+          "prose": 96,
+          "sha256": "e531bd3eb38bf0fe8b44b9d3c97ed6423fb892e0c6656364fe4166a1355b2e6e"
         },
         "outcome": "error",
         "residue": {
@@ -2435,15 +2435,15 @@
       "observed": {
         "errorClass": "GitRepositoryNotFoundError",
         "message": {
-          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
-          "length": 36
+          "prose": 36,
+          "sha256": "5b250b4a30e89b18ff2e1e9cdade1cd8c95258450036a7c5813f372c1448bda7"
         },
         "outcome": "error"
       },
       "setup": "target-tree"
     }
   ],
-  "note": "Worktree corpus: what the pinned reference's own worktree functions answer over repositories this capture scripts under a hermetic git environment. Paths are relative to the case root, the managed directory's hashed segment is {repoDir} and the scripted head commit is {headCommit}, so the corpus is machine-independent. A reference sentence is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when the pinned reference moves.",
+  "note": "Worktree corpus: what the pinned reference's own worktree functions answer over repositories this capture scripts under a hermetic git environment. Paths are relative to the case root, the managed directory's hashed segment is {repoDir} and the scripted head commit is {headCommit}, so the corpus is machine-independent. A reference sentence is committed as a {prose, sha256} digest of its length and SHA-256, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when the pinned reference moves.",
   "platform": "linux",
   "referenceCommit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
   "schemaVersion": 1,

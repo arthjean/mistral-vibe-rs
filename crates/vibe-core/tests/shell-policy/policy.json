@@ -25,8 +25,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -48,8 +48,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -83,8 +83,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -118,8 +118,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -153,8 +153,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -176,8 +176,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -205,8 +205,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -228,8 +228,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -251,8 +251,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -337,8 +337,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -409,8 +409,8 @@
         {
           "invocationPattern": "<outside>/nested",
           "label": {
-            "described": "sha256:730747d75dce92e7b8548858f552e9be",
-            "length": 34
+            "prose": 34,
+            "sha256": "730747d75dce92e7b8548858f552e9be22cc9274c0b9474432f779b2cb7cf564"
           },
           "pathScopeRoot": "<outside>/nested",
           "scope": "outside_directory",
@@ -444,8 +444,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -454,8 +454,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -489,8 +489,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -518,8 +518,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1004,8 +1004,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1042,8 +1042,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1062,8 +1062,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1072,8 +1072,8 @@
         {
           "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
-            "length": 45
+            "prose": 45,
+            "sha256": "d5bdfee721ae61766ccbcc1da921afda3f86d7257dc8e2d16654beef127af920"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -1092,8 +1092,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -1112,8 +1112,8 @@
         {
           "invocationPattern": "shell override: /bin/zsh",
           "label": {
-            "described": "sha256:672467dc313166f179c337118f00e325",
-            "length": 23
+            "prose": 23,
+            "sha256": "672467dc313166f179c337118f00e325662744766334ced30a7b4f223636c7bc"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1135,8 +1135,8 @@
         {
           "invocationPattern": "env override: A, B",
           "label": {
-            "described": "sha256:d5b3b391a5c1da2c18b3c4024219a7e8",
-            "length": 25
+            "prose": 25,
+            "sha256": "d5b3b391a5c1da2c18b3c4024219a7e8f972af69f12c9d7243200764ea2baa7d"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1164,8 +1164,8 @@
         {
           "invocationPattern": "shell override: /bin/zsh",
           "label": {
-            "described": "sha256:672467dc313166f179c337118f00e325",
-            "length": 23
+            "prose": 23,
+            "sha256": "672467dc313166f179c337118f00e325662744766334ced30a7b4f223636c7bc"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1174,8 +1174,8 @@
         {
           "invocationPattern": "env override: X",
           "label": {
-            "described": "sha256:a7c7d4565fd1047480490e58d8d75fdb",
-            "length": 22
+            "prose": 22,
+            "sha256": "a7c7d4565fd1047480490e58d8d75fdb51ff53009f836e859623a64b3209c7f1"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1219,8 +1219,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1246,8 +1246,8 @@
         {
           "invocationPattern": "shell override: /bin/zsh",
           "label": {
-            "described": "sha256:672467dc313166f179c337118f00e325",
-            "length": 23
+            "prose": 23,
+            "sha256": "672467dc313166f179c337118f00e325662744766334ced30a7b4f223636c7bc"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1275,8 +1275,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1285,8 +1285,8 @@
         {
           "invocationPattern": "env override: A",
           "label": {
-            "described": "sha256:d3bdc53d88df1d136d7cd646226b4aae",
-            "length": 22
+            "prose": 22,
+            "sha256": "d3bdc53d88df1d136d7cd646226b4aae55c1b34aef76bd988f455775367987e2"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1660,8 +1660,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1678,8 +1678,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1696,8 +1696,8 @@
         {
           "invocationPattern": "git diff [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:246050b60c622e9e0a8d742976690204",
-            "length": 8
+            "prose": 8,
+            "sha256": "246050b60c622e9e0a8d7429766902046711650786484d881e3cec4905a5444b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1714,8 +1714,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1732,8 +1732,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1750,8 +1750,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1760,8 +1760,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1806,8 +1806,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1824,8 +1824,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1842,8 +1842,8 @@
         {
           "invocationPattern": "git diff [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:246050b60c622e9e0a8d742976690204",
-            "length": 8
+            "prose": 8,
+            "sha256": "246050b60c622e9e0a8d7429766902046711650786484d881e3cec4905a5444b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1860,8 +1860,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1878,8 +1878,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1896,8 +1896,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1906,8 +1906,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1938,8 +1938,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1956,8 +1956,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -1974,8 +1974,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -1992,8 +1992,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2010,8 +2010,8 @@
         {
           "invocationPattern": "git diff [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:246050b60c622e9e0a8d742976690204",
-            "length": 8
+            "prose": 8,
+            "sha256": "246050b60c622e9e0a8d7429766902046711650786484d881e3cec4905a5444b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2042,8 +2042,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -2052,8 +2052,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2070,8 +2070,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2088,8 +2088,8 @@
         {
           "invocationPattern": "git diff [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:246050b60c622e9e0a8d742976690204",
-            "length": 8
+            "prose": 8,
+            "sha256": "246050b60c622e9e0a8d7429766902046711650786484d881e3cec4905a5444b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2106,8 +2106,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2124,8 +2124,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2142,8 +2142,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -2152,8 +2152,8 @@
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2184,8 +2184,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2202,8 +2202,8 @@
         {
           "invocationPattern": "git log [git repositories: <workdir>/.git]",
           "label": {
-            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
-            "length": 7
+            "prose": 7,
+            "sha256": "fa7b080f3e54dea088785fcbaafa358e199e4ae018cc2c559cdbbbdb5b7b4900"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2220,8 +2220,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -2507,8 +2507,8 @@
         {
           "invocationPattern": "python3 <<'EOF'\nprint(1)\nEOF",
           "label": {
-            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
-            "length": 44
+            "prose": 44,
+            "sha256": "e436ecd66d6b18790da4595e645a16317be76137b1ba08ccdaa1022db55fc1b5"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2528,8 +2528,8 @@
         {
           "invocationPattern": "cat 'unterminated",
           "label": {
-            "described": "sha256:74440bf3141d30983fb296d758656799",
-            "length": 47
+            "prose": 47,
+            "sha256": "74440bf3141d30983fb296d758656799f3483e9a773b3be37924ef4b52e046d0"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2670,8 +2670,8 @@
         {
           "invocationPattern": "find . -exec rm {} ; && find . -exec rm {} ;",
           "label": {
-            "described": "sha256:907c04349f3cb86847fe445cf9b69c6b",
-            "length": 64
+            "prose": 64,
+            "sha256": "907c04349f3cb86847fe445cf9b69c6b90b40167e3efdf0e9013ae2d086a37fd"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2829,8 +2829,8 @@
         {
           "invocationPattern": "cat file.txt > out.txt",
           "label": {
-            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
-            "length": 44
+            "prose": 44,
+            "sha256": "e436ecd66d6b18790da4595e645a16317be76137b1ba08ccdaa1022db55fc1b5"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -2860,8 +2860,8 @@
         {
           "invocationPattern": "/etc/passwd",
           "label": {
-            "described": "sha256:4c3c8efba9982bcb5d0ac3e8117620b6",
-            "length": 29
+            "prose": 29,
+            "sha256": "4c3c8efba9982bcb5d0ac3e8117620b6976c066197774627e7ace1ddd9b1e63b"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -2939,8 +2939,8 @@
         {
           "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
-            "length": 28
+            "prose": 28,
+            "sha256": "638870963f1af55d63ebd7c3aa964b2fd65c7dbe61d9ce596f6ed4edc7306e4e"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -3138,8 +3138,8 @@
         {
           "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
-            "length": 28
+            "prose": 28,
+            "sha256": "638870963f1af55d63ebd7c3aa964b2fd65c7dbe61d9ce596f6ed4edc7306e4e"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -3155,8 +3155,8 @@
         {
           "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
-            "length": 28
+            "prose": 28,
+            "sha256": "638870963f1af55d63ebd7c3aa964b2fd65c7dbe61d9ce596f6ed4edc7306e4e"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",
@@ -3200,8 +3200,8 @@
         {
           "invocationPattern": "git log --ext-diff [git repositories: directory:<workdir>]",
           "label": {
-            "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
-            "length": 18
+            "prose": 18,
+            "sha256": "3d30af43661fbf95010c6ed4df3b9f2253d90474e264174ca1df614f64fe16c3"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3217,8 +3217,8 @@
         {
           "invocationPattern": "git log --output=out.txt [git repositories: directory:<workdir>]",
           "label": {
-            "described": "sha256:eaafeb1fde46a5fd6dc0b136173748c1",
-            "length": 24
+            "prose": 24,
+            "sha256": "eaafeb1fde46a5fd6dc0b136173748c1b824b017976399e3988859d4ea289754"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3240,8 +3240,8 @@
         {
           "invocationPattern": "git diff --diff-merges=remerge [git repositories: directory:<workdir>]",
           "label": {
-            "described": "sha256:089d5620fb45b9504d239d73db4476b3",
-            "length": 30
+            "prose": 30,
+            "sha256": "089d5620fb45b9504d239d73db4476b3eee532f69bc98ecda590b524ea2964da"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3299,8 +3299,8 @@
         {
           "invocationPattern": "git log --ext-diff [git repositories: directory:<workdir>]",
           "label": {
-            "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
-            "length": 18
+            "prose": 18,
+            "sha256": "3d30af43661fbf95010c6ed4df3b9f2253d90474e264174ca1df614f64fe16c3"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3411,8 +3411,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -3442,8 +3442,8 @@
         {
           "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3487,8 +3487,8 @@
         {
           "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3504,8 +3504,8 @@
         {
           "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:f7f953559eeb444deea225026c02fb78",
-            "length": 27
+            "prose": 27,
+            "sha256": "f7f953559eeb444deea225026c02fb780a04f3959571099887d0f3c68521bce7"
           },
           "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
@@ -3514,8 +3514,8 @@
         {
           "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
           "label": {
-            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
-            "length": 10
+            "prose": 10,
+            "sha256": "e62b04aadf39df1a47b771265e4ae5c452df3f1903d5c263ab00f088e86102f6"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3531,8 +3531,8 @@
         {
           "invocationPattern": "git $SUB",
           "label": {
-            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
-            "length": 51
+            "prose": 51,
+            "sha256": "494a5b0a7ee50e50972bcc18056ac0100031cbd0bc0f3ef48d551ec142fc4144"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3548,8 +3548,8 @@
         {
           "invocationPattern": "sudo $CMD",
           "label": {
-            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
-            "length": 51
+            "prose": 51,
+            "sha256": "494a5b0a7ee50e50972bcc18056ac0100031cbd0bc0f3ef48d551ec142fc4144"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3565,8 +3565,8 @@
         {
           "invocationPattern": "git log $REF",
           "label": {
-            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
-            "length": 51
+            "prose": 51,
+            "sha256": "494a5b0a7ee50e50972bcc18056ac0100031cbd0bc0f3ef48d551ec142fc4144"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3610,8 +3610,8 @@
         {
           "invocationPattern": "HOME=/x git status",
           "label": {
-            "described": "sha256:aa4cd38ef287a8504655ce63606a4ccb",
-            "length": 56
+            "prose": 56,
+            "sha256": "aa4cd38ef287a8504655ce63606a4ccbe1c8670df9b3eaf97900f812e24fcf6f"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3667,8 +3667,8 @@
         {
           "invocationPattern": "ls >&file",
           "label": {
-            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
-            "length": 44
+            "prose": 44,
+            "sha256": "e436ecd66d6b18790da4595e645a16317be76137b1ba08ccdaa1022db55fc1b5"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3684,8 +3684,8 @@
         {
           "invocationPattern": "cat <<< text",
           "label": {
-            "described": "sha256:4d43c25388b01267ba061c4e0a9b51d4",
-            "length": 86
+            "prose": 86,
+            "sha256": "4d43c25388b01267ba061c4e0a9b51d46713d07bb8ac40a3d74db9c0fc19586b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3715,8 +3715,8 @@
         {
           "invocationPattern": "=ls",
           "label": {
-            "described": "sha256:14586885161ff5dd866fa86f2fac9fda",
-            "length": 53
+            "prose": 53,
+            "sha256": "14586885161ff5dd866fa86f2fac9fda16fbfd92c294c97ea31902572cbb7709"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3746,8 +3746,8 @@
         {
           "invocationPattern": "f() { ls; }",
           "label": {
-            "described": "sha256:61766404d151fa1921c2f0e2d887933a",
-            "length": 67
+            "prose": 67,
+            "sha256": "61766404d151fa1921c2f0e2d887933a27ab63962c8637bbc148cbddda7d5d5d"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3763,8 +3763,8 @@
         {
           "invocationPattern": "ls \\\n -la",
           "label": {
-            "described": "sha256:dc10c63d456920da3da1a2bfe02baf92",
-            "length": 50
+            "prose": 50,
+            "sha256": "dc10c63d456920da3da1a2bfe02baf9233771f0012a679af7a012c15b926a2de"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3780,8 +3780,8 @@
         {
           "invocationPattern": "[[ -n $FOO ]]",
           "label": {
-            "described": "sha256:3bbbce9eecd05d39984aab47fff4176c",
-            "length": 68
+            "prose": 68,
+            "sha256": "3bbbce9eecd05d39984aab47fff4176c2d836deff59277b6433bc714ff98085b"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3825,8 +3825,8 @@
         {
           "invocationPattern": "npm run $TASK",
           "label": {
-            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
-            "length": 51
+            "prose": 51,
+            "sha256": "494a5b0a7ee50e50972bcc18056ac0100031cbd0bc0f3ef48d551ec142fc4144"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3856,8 +3856,8 @@
         {
           "invocationPattern": "cargo $CMD",
           "label": {
-            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
-            "length": 51
+            "prose": 51,
+            "sha256": "494a5b0a7ee50e50972bcc18056ac0100031cbd0bc0f3ef48d551ec142fc4144"
           },
           "pathScopeRoot": null,
           "scope": "command_pattern",
@@ -3915,8 +3915,8 @@
         {
           "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
-            "length": 38
+            "prose": 38,
+            "sha256": "9d4dcea7f76ce0169504db13046d2bf9008e7a396121f4d69faf7b281b64fc63"
           },
           "pathScopeRoot": null,
           "scope": "outside_directory",

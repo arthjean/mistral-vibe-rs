@@ -309,7 +309,7 @@ impl ServerConnection {
         )?;
         if content.is_empty() {
             return Err(ProtocolFault::invalid_params(
-                "Unified Harness turn/steer currently supports text input only",
+                "turn/steer on the Unified Harness accepts text input alone for now",
             ));
         }
         let publication = {
@@ -466,7 +466,7 @@ impl AppServer {
             if !matches!(origin, TurnOrigin::Queued { .. }) && !host.queue.is_empty() {
                 return Err(ProtocolFault::with_data(
                     ProtocolErrorCode::Conflict,
-                    "Resume queued turns before starting a direct turn",
+                    "Queued turns are waiting: resume them before a direct turn can start",
                     json!({"harnessCode": "turn_queue_pending"}),
                 ));
             }

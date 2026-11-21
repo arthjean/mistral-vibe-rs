@@ -1,10 +1,9 @@
 //! Per-turn file snapshots that answer a rewind's restore.
 //!
 //! Reference `RewindFileSnapshots` (`vibe/app_server/_unified_harness_snapshots.py`):
-//! the harness writes files without snapshotting them, so the host records
-//! disk states at the turn boundaries it observes in the published state.
-//! A turn is anchored on its opening user entry, which is what a rewind
-//! names. A file's state before a turn is the content a `write_file` replaced
+//! the harness never snapshots the files it writes, so the host keeps the
+//! state of the disk at every turn boundary the published state shows. Each
+//! turn hangs on the user entry that opens it, the entry a rewind points at. A file's state before a turn is the content a `write_file` replaced
 //! when its result says so, else what the file held when the turn began
 //! (for a path the previous turn touched) or when the turn first touched it.
 //! Snapshots live in memory: turns from before this process restore nothing.
@@ -223,8 +222,9 @@ impl RewindSnapshots {
         if !clean {
             return;
         }
-        // Held back until a write names its exact replaced text, which wins,
-        // or the turn seals: this read can lag the turn's first write.
+        // Kept pending until the turn seals or a write reports the exact text it
+        // replaced (that text takes precedence), since this read may trail the
+        // turn's first write.
         for path in carried {
             if let Ok(read) = read(&path) {
                 self.pending.push((path, read));
@@ -285,8 +285,8 @@ impl RewindSnapshots {
                 continue;
             };
             self.seen_effects.insert(id.to_owned());
-            // Inherited fork entries carry no turn, so an idle session would
-            // otherwise match them against the absent open turn.
+            // Entries a fork inherits belong to no turn; without this check an
+            // idle session would pair them with an open turn that does not exist.
             if self.begun_turn.is_none()
                 || entry["turnId"].as_str() != self.begun_turn.as_deref()
                 || self.touched.contains(&path)

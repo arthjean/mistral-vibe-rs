@@ -1,0 +1,66 @@
+# Lint and type-check configuration for the parity drivers and their shared
+# modules. Nothing here packages them: a driver runs as a script, first under
+# the host's `python3`, then re-executed under the interpreter of a
+# materialized reference environment (`reference.py`), where it imports
+# `vibe`. The CI `quality` job runs both tools at the versions
+# `lint-requirements.txt` pins; AGENTS.md ("Quality gates") gives the local
+# commands.
+
+[tool.ruff]
+# A different ruff refuses to run rather than apply another rule set.
+required-version = "==0.15.2"
+# The reference requires Python 3.12, the oldest interpreter a driver runs on.
+target-version = "py312"
+
+[tool.ruff.lint]
+# `E4`, `E7`, `E9` and `F` are ruff's defaults (pycodestyle errors and
+# pyflakes); `W` adds the pycodestyle warnings (invalid escapes, stray
+# whitespace), `B` bugbear's likely bugs, and `PLE` pylint's errors. Line
+# length (`E501`) stays off: corpus pointers and reference paths run long, and
+# the tree is not formatted by ruff.
+select = ["E4", "E7", "E9", "F", "W", "B", "PLE"]
+ignore = [
+    # A closure that reads a loop variable: every one in this tree is a stand-in
+    # handler or a callback that runs and finishes inside the iteration that
+    # defines it, which is the late binding B023 warns about only when the
+    # closure outlives the loop.
+    "B023",
+    # `getattr(obj, "_private")` is how a driver reads a private member of a
+    # reference object, so the reach past the reference's public surface stays
+    # visible at the call site.
+    "B009",
+]
+
+[tool.mypy]
+# The drivers run on the reference's Python, 3.12 at the oldest.
+python_version = "3.12"
+files = ["."]
+# Only the bundled standard-library stubs resolve, so a run reads the same on
+# every host whatever the environment mypy is installed into holds.
+no_site_packages = true
+# Past mypy's default, the body of a function without annotations is checked
+# too (a handful of the tree's functions; every other one is annotated).
+check_untyped_defs = true
+warn_redundant_casts = true
+strict_equality = true
+
+# The reference package and the libraries it brings, present only inside a
+# materialized reference environment. Every other import must resolve, so a
+# misspelled sibling module still fails the check.
+[[tool.mypy.overrides]]
+module = [
+    "vibe.*",
+    "mistralai_vibe_local_harness.*",
+    "dotenv.*",
+    "httpx2.*",
+    "keyring.*",
+    "miniaudio.*",
+    "mistralai.*",
+    "opentelemetry.*",
+    "pydantic.*",
+    "tomli_w.*",
+    "zstandard.*",
+    # Standard library from Python 3.14, imported behind a fallback.
+    "compression.*",
+]
+ignore_missing_imports = true

@@ -230,10 +230,10 @@ pub fn approval_callback(
     let related_entry_id = format!("effect-{}", action.action_id);
     let (message, status_text) = if tool_name == "process.start" {
         (
-            "Start an interactive process. Vibe may send it further input until it exits \
-             or is stopped."
+            "Launch an interactive process that Vibe can keep feeding input until it \
+             exits or is stopped."
                 .to_owned(),
-            "Waiting for approval to start an interactive process".to_owned(),
+            "Approval pending before an interactive process starts".to_owned(),
         )
     } else {
         (

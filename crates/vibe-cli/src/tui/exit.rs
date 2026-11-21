@@ -8,7 +8,7 @@ use super::interaction::QuitConfirmation;
 
 /// Reference `action_suspend_with_message`.
 pub const SUSPEND_MESSAGE: &str =
-    "Mistral Vibe has been suspended. Run fg to bring Mistral Vibe back.";
+    "Mistral Vibe is now suspended. Type fg to bring Mistral Vibe back.";
 
 /// Reference `TokenUsage`, as the exit summary reports it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub struct SessionExitSummary {
 #[must_use]
 pub fn format_session_usage(usage: SessionUsage) -> String {
     format!(
-        "Total tokens used this session: input={} output={} (total={})",
+        "Tokens spent in this session: input={} output={} (total={})",
         thousands(usage.input_tokens),
         thousands(usage.output_tokens),
         thousands(usage.total_tokens()),
@@ -108,7 +108,7 @@ mod tests {
                 input_tokens: 1_234,
                 output_tokens: 567,
             }),
-            "Total tokens used this session: input=1,234 output=567 (total=1,801)"
+            "Tokens spent in this session: input=1,234 output=567 (total=1,801)"
         );
     }
 
@@ -131,7 +131,7 @@ mod tests {
             }),
             vec![
                 String::new(),
-                "Total tokens used this session: input=10 output=5 (total=15)".to_owned(),
+                "Tokens spent in this session: input=10 output=5 (total=15)".to_owned(),
                 String::new(),
                 "To continue this session, run: vibe --continue".to_owned(),
                 "Or: vibe --resume 01234567".to_owned(),

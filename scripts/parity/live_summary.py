@@ -9,7 +9,9 @@ The Rust gate ``vibe_core::parity::live`` appends a line to
 ``drivers.jsonl`` (``scripts/parity/reference.py``); every replay appends its
 measured figures to ``figures.jsonl`` (``vibe_core::parity::figures``); every
 recapture of a driver no probe calls appends one to ``checks.jsonl``
-(``repin.py check --unprobed``). This script counts them,
+(``repin.py check --unprobed``); every sensitivity pass appends its matrix to
+``sensitivity/matrix.jsonl``. This script counts them, prints the
+sensitivity matrix by scorecard row,
 and with a nextest JUnit report classes every failed test:
 
 * **provenance**: a corpus outside the manifest's rules (the messages of
@@ -139,6 +141,56 @@ def manifest_drivers() -> set[str]:
     return drivers
 
 
+#: The mutation operators of the sensitivity pass, in its matrix order.
+OPERATORS = ("delete-key", "add-key", "change-value", "change-type", "change-length", "reorder", "drop-element")
+
+
+def sensitivity_lines(records: Path) -> list[str]:
+    """The operator-by-row matrix of the sensitivity passes this run made
+    (``vibe_core::parity::sensitivity``): per scorecard row, the mutations
+    its replays detected out of those applied, per operator, and what the
+    drivers' normalization erased of the raw mutations it re-normalized."""
+    matrices = read_lines(records / "sensitivity" / "matrix.jsonl")
+    if not matrices:
+        return []
+    # The last pass of a replay wins, so a rerun replaces what it measured.
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    for matrix in matrices:
+        latest[(str(matrix.get("corpus")), str(matrix.get("heading")))] = matrix
+    by_row: dict[str, dict[str, list[int]]] = {}
+    erased: dict[str, list[int]] = {}
+    for matrix in latest.values():
+        row = str(matrix.get("row") or "?")
+        cells = by_row.setdefault(row, {operator: [0, 0] for operator in OPERATORS})
+        for operator, counts in (matrix.get("operators") or {}).items():
+            cell = cells.setdefault(operator, [0, 0])
+            cell[0] += int(counts.get("detected", 0))
+            cell[1] += int(counts.get("applied", 0))
+        normalization = matrix.get("normalization") or {}
+        for counts in (normalization.get("operators") or {}).values():
+            total = erased.setdefault(row, [0, 0])
+            total[0] += int(counts.get("erased", 0))
+            total[1] += int(counts.get("applied", 0))
+    seeds = sorted({str(matrix.get("seed")) for matrix in latest.values()})
+    elapsed = sum(int(matrix.get("elapsedMs", 0)) for matrix in latest.values()) / 1000
+    lines = [
+        f"**Sensitivity**: {len(latest)} replays mutated their port observations "
+        f"(seed {', '.join(seeds)}) in {elapsed:.1f} s; each cell is detected/applied.",
+        "",
+        "| Row | " + " | ".join(OPERATORS) + " | Normalization erased |",
+        "|---|" + "---|" * (len(OPERATORS) + 1),
+    ]
+    for row in sorted(by_row, key=lambda name: (not name.isdigit(), int(name) if name.isdigit() else 0, name)):
+        cells = by_row[row]
+        erasure = erased.get(row)
+        lines.append(
+            f"| {row} | "
+            + " | ".join(f"{cells[operator][0]}/{cells[operator][1]}" for operator in OPERATORS)
+            + f" | {f'{erasure[0]}/{erasure[1]}' if erasure else '-'} |"
+        )
+    return [*lines, ""]
+
+
 def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
     records = arguments.records
     probes = read_lines(records / "probes.jsonl")
@@ -230,6 +282,8 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
         else:
             named = "none"
         lines += [f"**The run timed out. Last completed probe: {named}.**", ""]
+
+    lines += sensitivity_lines(records)
 
     status = 0
     if arguments.require_live and skips:

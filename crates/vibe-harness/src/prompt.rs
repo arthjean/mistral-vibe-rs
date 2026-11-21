@@ -92,9 +92,9 @@ Find functions with the top-level `search_tool_functions` tool. Before using a f
 const BACKGROUND_PROCESSES: &str = "## Background processes
 
 When a command has to keep running while you do other work, use the `tools.process` group from `run_typescript`:
-- `tools.process.start` takes the same command syntax as `tools.file_system.bash` and answers at once with a process ID that stays valid.
+- `tools.process.start` accepts commands written as for `tools.file_system.bash` and answers at once with a process ID that stays valid.
 - `tools.process.output` reads output from a byte cursor, optionally waiting for more output or for the process to end; `from: \"end\"` reads the newest page instead. Continue reading at `nextCursor`; `hasMore` says retained output remains unread and `truncatedBefore` says older output was dropped.
-- `tools.process.write` sends text, control keys or raw bytes to an interactive process.
+- `tools.process.write` delivers text, control keys or raw bytes to a process that reads input.
 - `tools.process.list` shows the processes of this session.
 - `tools.process.stop` ends a process together with its children.
 

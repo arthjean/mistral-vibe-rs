@@ -1,7 +1,7 @@
 {
   "corpus": "crates/vibe-cli/tests/runtime-parity/cli-surface.json",
   "measuredAgainst": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "cli surface parity (startup failures at the process boundary):": {
       "case/startup/add-dir-missing": {
@@ -30,252 +30,852 @@
     },
     "cli surface parity:": {
       "case/config-schema/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/config/no-subcommand": {
-        "/exit": 1,
-        "/stderr": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "06853d2af5540c98",
+          "level": "exact"
+        },
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "cdf1e51fbc45c9b1",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "94cba9e2a3e491c0",
+          "level": "exact"
+        }
       },
       "case/config/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/config/unknown-subcommand": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-argument": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--api-key-env": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--api-key-format": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--api-key-header": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--arg": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--command": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--env": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--header": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--name": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--scope": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--startup-timeout-sec": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--tool-timeout-sec": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--transport": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/missing-value--url": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/not-a-choice--transport": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "4bbc2d72f7319da6",
+          "level": "exact"
+        }
       },
       "case/mcp-add/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/mcp-remove/missing-argument": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "0ca1995ed7387e18",
+          "level": "exact"
+        }
       },
       "case/mcp-remove/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/mcp/no-subcommand": {
-        "/exit": 1,
-        "/stderr": 1,
-        "/stderrFirstLine": 1,
-        "/stdout": 1,
-        "/stdoutFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "06853d2af5540c98",
+          "level": "exact"
+        },
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "cdf1e51fbc45c9b1",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "94cba9e2a3e491c0",
+          "level": "exact"
+        },
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "ad63155450ee03b1",
+          "level": "exact"
+        },
+        "/stdoutFirstLine": {
+          "count": 1,
+          "fingerprint": "7209f05cdfad6ed8",
+          "level": "exact"
+        }
       },
       "case/mcp/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/mcp/unknown-subcommand": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "bdec4036cf83f6f2",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--add-dir": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--agent": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--disabled-tools": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--enabled-tools": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--max-price": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--max-tokens": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--max-turns": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--model": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--output": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--output-dir": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--prompt-file": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--system-prompt-file": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--time-limit": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/missing-value--workdir": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/not-a-choice--output": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/root/unknown--no-such-flag": {
-        "/exit": 1,
-        "/stderrFirstLine": 1
+        "/exit": {
+          "count": 1,
+          "fingerprint": "db7dc715c5d017be",
+          "level": "exact"
+        },
+        "/stderrFirstLine": {
+          "count": 1,
+          "fingerprint": "46834ae1d2a8fd09",
+          "level": "exact"
+        }
       },
       "case/version-long": {
-        "/stdoutFirstLine": 1
+        "/stdoutFirstLine": {
+          "count": 1,
+          "fingerprint": "eb1eea0f2f1e7534",
+          "level": "exact"
+        }
       },
       "case/version-short": {
-        "/stdoutFirstLine": 1
+        "/stdoutFirstLine": {
+          "count": 1,
+          "fingerprint": "eb1eea0f2f1e7534",
+          "level": "exact"
+        }
       },
       "help/config": {
-        "/absent": 1,
-        "/arguments": 1,
-        "/commands": 1,
-        "/description": 1,
-        "/options": 1,
-        "/sections": 1,
-        "/trailingCommands": 1,
-        "/usage": 1
+        "/absent": {
+          "count": 1,
+          "fingerprint": "953b552b3ef8dfde",
+          "level": "exact"
+        },
+        "/arguments": {
+          "count": 1,
+          "fingerprint": "da86fdaf4c7094ca",
+          "level": "exact"
+        },
+        "/commands": {
+          "count": 1,
+          "fingerprint": "2ffc68e6c5e8a84b",
+          "level": "exact"
+        },
+        "/description": {
+          "count": 1,
+          "fingerprint": "51482bb9ede9206b",
+          "level": "exact"
+        },
+        "/options": {
+          "count": 1,
+          "fingerprint": "e7885e7554eb6b3b",
+          "level": "exact"
+        },
+        "/sections": {
+          "count": 1,
+          "fingerprint": "de9a8f9f5a4bc4a7",
+          "level": "exact"
+        },
+        "/trailingCommands": {
+          "count": 1,
+          "fingerprint": "904c504fd2980655",
+          "level": "exact"
+        },
+        "/usage": {
+          "count": 1,
+          "fingerprint": "36311c5bf6c6c2a3",
+          "level": "exact"
+        }
       },
       "help/config schema": {
-        "/absent": 1,
-        "/arguments": 1,
-        "/commands": 1,
-        "/description": 1,
-        "/options": 1,
-        "/sections": 1,
-        "/trailingCommands": 1,
-        "/usage": 1
+        "/absent": {
+          "count": 1,
+          "fingerprint": "953b552b3ef8dfde",
+          "level": "exact"
+        },
+        "/arguments": {
+          "count": 1,
+          "fingerprint": "da86fdaf4c7094ca",
+          "level": "exact"
+        },
+        "/commands": {
+          "count": 1,
+          "fingerprint": "2ffc68e6c5e8a84b",
+          "level": "exact"
+        },
+        "/description": {
+          "count": 1,
+          "fingerprint": "51482bb9ede9206b",
+          "level": "exact"
+        },
+        "/options": {
+          "count": 1,
+          "fingerprint": "e7885e7554eb6b3b",
+          "level": "exact"
+        },
+        "/sections": {
+          "count": 1,
+          "fingerprint": "de9a8f9f5a4bc4a7",
+          "level": "exact"
+        },
+        "/trailingCommands": {
+          "count": 1,
+          "fingerprint": "904c504fd2980655",
+          "level": "exact"
+        },
+        "/usage": {
+          "count": 1,
+          "fingerprint": "36311c5bf6c6c2a3",
+          "level": "exact"
+        }
       },
       "help/mcp": {
-        "/commands/help": 1,
-        "/options/--help/description": 1,
-        "/usage": 1
+        "/commands/help": {
+          "count": 1,
+          "fingerprint": "cdaa87139719b9af",
+          "level": "exact"
+        },
+        "/options/--help/description": {
+          "count": 1,
+          "fingerprint": "7689cd5fc8960446",
+          "level": "exact"
+        },
+        "/usage": {
+          "count": 1,
+          "fingerprint": "5eb1853f898ac903",
+          "level": "exact"
+        }
       },
       "help/mcp add": {
-        "/arguments/<NAME>": 1,
-        "/arguments/<NAME_OR_URL>": 1,
-        "/options/--api-key-env/aliases": 1,
-        "/options/--api-key-env/description": 1,
-        "/options/--help/description": 1,
-        "/options/--name": 1,
-        "/options/--scope": 1,
-        "/options/--transport/value": 1,
-        "/usage": 1
+        "/arguments/<NAME>": {
+          "count": 1,
+          "fingerprint": "2a04b94b6a49e9b3",
+          "level": "exact"
+        },
+        "/arguments/<NAME_OR_URL>": {
+          "count": 1,
+          "fingerprint": "a461ee97586a9965",
+          "level": "exact"
+        },
+        "/options/--api-key-env/aliases": {
+          "count": 1,
+          "fingerprint": "5927764a632c99ca",
+          "level": "exact"
+        },
+        "/options/--api-key-env/description": {
+          "count": 1,
+          "fingerprint": "159dafbb36883428",
+          "level": "exact"
+        },
+        "/options/--help/description": {
+          "count": 1,
+          "fingerprint": "159f65964e63f4e1",
+          "level": "exact"
+        },
+        "/options/--name": {
+          "count": 1,
+          "fingerprint": "fd6be139f8f447cb",
+          "level": "exact"
+        },
+        "/options/--scope": {
+          "count": 1,
+          "fingerprint": "726e0c78f7cfff21",
+          "level": "exact"
+        },
+        "/options/--transport/value": {
+          "count": 1,
+          "fingerprint": "073bb9163f507804",
+          "level": "exact"
+        },
+        "/usage": {
+          "count": 1,
+          "fingerprint": "478fff3a76d7dcca",
+          "level": "exact"
+        }
       },
       "help/mcp remove": {
-        "/arguments/<NAME>/description": 1,
-        "/options/--help/description": 1
+        "/arguments/<NAME>/description": {
+          "count": 1,
+          "fingerprint": "4cd66ed9f977619f",
+          "level": "exact"
+        },
+        "/options/--help/description": {
+          "count": 1,
+          "fingerprint": "159f65964e63f4e1",
+          "level": "exact"
+        }
       },
       "help/vibe": {
-        "/arguments/[INITIAL_PROMPT]": 1,
-        "/arguments/[PROMPT]": 1,
-        "/commands/config": 1,
-        "/commands/help": 1,
-        "/commands/mcp": 1,
-        "/options/--add-dir/value": 1,
-        "/options/--agent/description": 1,
-        "/options/--auto-approve/aliases": 1,
-        "/options/--auto-approve/description": 1,
-        "/options/--disabled-tools/value": 1,
-        "/options/--enabled-tools/value": 1,
-        "/options/--experimental-harness": 1,
-        "/options/--help/description": 1,
-        "/options/--legacy-harness": 1,
-        "/options/--max-price/value": 1,
-        "/options/--max-tokens/value": 1,
-        "/options/--max-turns/value": 1,
-        "/options/--model": 1,
-        "/options/--output-dir": 1,
-        "/options/--output/description": 1,
-        "/options/--output/value": 1,
-        "/options/--prompt-file": 1,
-        "/options/--prompt/value": 1,
-        "/options/--resume/value": 1,
-        "/options/--system-prompt-file": 1,
-        "/options/--time-limit": 1,
-        "/options/--workdir/env": 1,
-        "/options/--workdir/value": 1,
-        "/options/--worktree/value": 1,
-        "/sections/*": 3,
-        "/trailingCommands/update": 1,
-        "/usage": 1
+        "/arguments/[INITIAL_PROMPT]": {
+          "count": 1,
+          "fingerprint": "9c31ab618182f1ef",
+          "level": "exact"
+        },
+        "/arguments/[PROMPT]": {
+          "count": 1,
+          "fingerprint": "8e4e78b0e513f2be",
+          "level": "exact"
+        },
+        "/commands/config": {
+          "count": 1,
+          "fingerprint": "4c59cbf42f260c44",
+          "level": "exact"
+        },
+        "/commands/help": {
+          "count": 1,
+          "fingerprint": "cdaa87139719b9af",
+          "level": "exact"
+        },
+        "/commands/mcp": {
+          "count": 1,
+          "fingerprint": "776c547b5d95c99e",
+          "level": "exact"
+        },
+        "/options/--add-dir/value": {
+          "count": 1,
+          "fingerprint": "12f0455fa16ed138",
+          "level": "exact"
+        },
+        "/options/--agent/description": {
+          "count": 1,
+          "fingerprint": "4fd1f2d0aa8ee982",
+          "level": "exact"
+        },
+        "/options/--auto-approve/aliases": {
+          "count": 1,
+          "fingerprint": "760f5b64e5c6874d",
+          "level": "exact"
+        },
+        "/options/--auto-approve/description": {
+          "count": 1,
+          "fingerprint": "588949634341ad3e",
+          "level": "exact"
+        },
+        "/options/--disabled-tools/value": {
+          "count": 1,
+          "fingerprint": "37057f9b0199026c",
+          "level": "exact"
+        },
+        "/options/--enabled-tools/value": {
+          "count": 1,
+          "fingerprint": "b3fafc2bee026891",
+          "level": "exact"
+        },
+        "/options/--experimental-harness": {
+          "count": 1,
+          "fingerprint": "1081d1138f6520bc",
+          "level": "exact"
+        },
+        "/options/--help/description": {
+          "count": 1,
+          "fingerprint": "66bd3fb0f34d4a92",
+          "level": "exact"
+        },
+        "/options/--legacy-harness": {
+          "count": 1,
+          "fingerprint": "454d0b31bcd603ee",
+          "level": "exact"
+        },
+        "/options/--max-price/value": {
+          "count": 1,
+          "fingerprint": "e0e84cbd4e774ddf",
+          "level": "exact"
+        },
+        "/options/--max-tokens/value": {
+          "count": 1,
+          "fingerprint": "3d47886d5a4480a6",
+          "level": "exact"
+        },
+        "/options/--max-turns/value": {
+          "count": 1,
+          "fingerprint": "a6368565e0b2ae61",
+          "level": "exact"
+        },
+        "/options/--model": {
+          "count": 1,
+          "fingerprint": "c9b5e004e348df0a",
+          "level": "exact"
+        },
+        "/options/--output-dir": {
+          "count": 1,
+          "fingerprint": "a18d5405642e706b",
+          "level": "exact"
+        },
+        "/options/--output/description": {
+          "count": 1,
+          "fingerprint": "f1bdac856c943022",
+          "level": "exact"
+        },
+        "/options/--output/value": {
+          "count": 1,
+          "fingerprint": "86b45a7f495e3f79",
+          "level": "exact"
+        },
+        "/options/--prompt-file": {
+          "count": 1,
+          "fingerprint": "599436ad7e97cbfb",
+          "level": "exact"
+        },
+        "/options/--prompt/value": {
+          "count": 1,
+          "fingerprint": "f8ef098bbe4ba1b3",
+          "level": "exact"
+        },
+        "/options/--resume/value": {
+          "count": 1,
+          "fingerprint": "02da4bc04488a55e",
+          "level": "exact"
+        },
+        "/options/--system-prompt-file": {
+          "count": 1,
+          "fingerprint": "54d495b5208d84e8",
+          "level": "exact"
+        },
+        "/options/--time-limit": {
+          "count": 1,
+          "fingerprint": "856640c705e43ecb",
+          "level": "exact"
+        },
+        "/options/--workdir/env": {
+          "count": 1,
+          "fingerprint": "8d2468f3b35104a6",
+          "level": "exact"
+        },
+        "/options/--workdir/value": {
+          "count": 1,
+          "fingerprint": "c0b154df41f2c898",
+          "level": "exact"
+        },
+        "/options/--worktree/value": {
+          "count": 1,
+          "fingerprint": "392e1ac38ca08100",
+          "level": "exact"
+        },
+        "/sections/*": {
+          "count": 3,
+          "fingerprint": "8a224c8d69a5d297",
+          "level": "exact"
+        },
+        "/trailingCommands/update": {
+          "count": 1,
+          "fingerprint": "c1d54e24f99bec0b",
+          "level": "exact"
+        },
+        "/usage": {
+          "count": 1,
+          "fingerprint": "541e5f8de761706f",
+          "level": "exact"
+        }
       }
     }
   }

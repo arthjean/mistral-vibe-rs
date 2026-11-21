@@ -58,11 +58,11 @@ impl PinTarget<'_> {
             return Ok(manifest::global_manifest_path(self.vibe_home));
         }
         let path = self.project_manifests().into_iter().next().ok_or_else(|| {
-            failure("no project skills manifest is available for a project-scoped pin")
+            failure("a project-scoped pin needs a project skills manifest, and none is available")
         })?;
         if !within_roots(&path, self.roots) {
             return Err(failure(format!(
-                "refusing to write a project skills manifest outside the project root: {}",
+                "the project skills manifest {} lies outside the project root and is not written",
                 path.display()
             )));
         }
@@ -284,7 +284,7 @@ pub fn remove_skill(
 /// Reference `convert_skill_to_local`: a pin's materialized content copied
 /// into the local skills directory of its scope as a standalone skill, and
 /// the pin removed. [`None`] when nothing is materialized, the name is not a
-/// plain path component, or a local skill of that name already exists.
+/// plain path component, or the scope already has a local skill by that name.
 ///
 /// # Errors
 ///

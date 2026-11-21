@@ -127,8 +127,8 @@ fn redact_secrets(value: &str, secrets: &[&str]) -> String {
     redacted
 }
 
-/// Reference `_secret_pattern`: every character as itself or as its UTF-8
-/// percent encoding, a space also as `+`.
+/// Reference `_secret_pattern`: each character matched literally or
+/// percent-encoded as UTF-8, with `+` also standing for a space.
 fn secret_pattern(secret: &str) -> String {
     secret
         .chars()

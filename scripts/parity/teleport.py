@@ -70,9 +70,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
+import sensitivity  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
 from vibe_code import (  # noqa: E402
@@ -547,7 +549,7 @@ def until(step: dict[str, Any], *kinds: str) -> dict[str, Any]:
     return {**step, "until": list(kinds)}
 
 
-START = {"start": {}}
+START: dict[str, Any] = {"start": {}}
 #: A turn that gives the session a history.
 HISTORY_TURN = {"turn": "Fix the failing test"}
 
@@ -908,12 +910,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'teleport')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:

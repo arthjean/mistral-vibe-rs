@@ -50,13 +50,13 @@ const UNIFIED: &[Case] = &[
         "read_file",
         "tool_error",
         r#"{"path":"missing.txt"}"#,
-        "e19f80332f6e3e18",
+        "39ea6a2f7c0075c4",
     ),
     case(
         "read_file",
         "invalid_arguments",
         r#"{"path":5}"#,
-        "9088082d2e00ab1d",
+        "264f2c94e7dead07",
     ),
     case(
         "write_file",
@@ -68,13 +68,13 @@ const UNIFIED: &[Case] = &[
         "write_file",
         "tool_error",
         r#"{"path":"adir","content":"x"}"#,
-        "6fcac581f7e082d6",
+        "00bd406bb5e10223",
     ),
     case(
         "write_file",
         "invalid_arguments",
         r#"{"path":"x.txt"}"#,
-        "b98c6cb7d20f2848",
+        "6dd24961c62f559a",
     ),
     case(
         "edit",
@@ -86,13 +86,13 @@ const UNIFIED: &[Case] = &[
         "edit",
         "tool_error",
         r#"{"file_path":"seed.txt","old_string":"zulu","new_string":"beta"}"#,
-        "01c925ef120fbb1c",
+        "37a10851032cff19",
     ),
     case(
         "edit",
         "invalid_arguments",
         r#"{"file_path":"seed.txt","old_string":"","new_string":"beta"}"#,
-        "029b6fb46c6757e5",
+        "3eade44b4e7f8e72",
     ),
     case(
         "bash",
@@ -106,7 +106,7 @@ const UNIFIED: &[Case] = &[
         r#"{"command":"echo oops >&2; exit 3"}"#,
         "a725006427c40e56",
     ),
-    case("bash", "invalid_arguments", r#"{}"#, "6003c27040000ab6"),
+    case("bash", "invalid_arguments", r#"{}"#, "827802101dddb737"),
     case(
         "todo",
         "valid",
@@ -117,13 +117,13 @@ const UNIFIED: &[Case] = &[
         "todo",
         "tool_error",
         r#"{"action":"write","todos":[{"id":"1","content":"a"},{"id":"1","content":"b"}]}"#,
-        "4cf7ce9905acfe6b",
+        "9c9686c76c25d110",
     ),
     case(
         "todo",
         "invalid_arguments",
         r#"{"action":"bogus"}"#,
-        "7f3cf36ad74a374b",
+        "3f1b07a84cac1965",
     ),
     case(
         "unified_harness_scratchpad",
@@ -135,36 +135,36 @@ const UNIFIED: &[Case] = &[
         "unified_harness_scratchpad",
         "tool_error",
         r#"{"action":"read","path":"missing.md"}"#,
-        "dc77259e0de9c73d",
+        "732881d773eb36a6",
     ),
     case(
         "unified_harness_scratchpad",
         "invalid_arguments",
         r#"{"action":"bogus"}"#,
-        "6fdf90c47b85fd47",
+        "436f579dd7fe2219",
     ),
     // `vibe -p` hosts no live session, so even a valid cron call fails.
-    case("cron", "valid", r#"{"action":"list"}"#, "f9d14b5261699fcc"),
+    case("cron", "valid", r#"{"action":"list"}"#, "9c9686c76c25d110"),
     case(
         "cron",
         "tool_error",
         r#"{"action":"cancel","id":"nope"}"#,
-        "f9d14b5261699fcc",
+        "9c9686c76c25d110",
     ),
     case(
         "cron",
         "invalid_arguments",
         r#"{"action":"schedule","interval_seconds":5,"prompt":"x"}"#,
-        "838f40465a67b26e",
+        "392ae8f268e7810d",
     ),
     case("skill", "valid", r#"{"name":"demo"}"#, "9d480d94ab62d7f8"),
     case(
         "skill",
         "tool_error",
         r#"{"name":"nosuch"}"#,
-        "2e1b136157cbf564",
+        "bfe5abee88bdb598",
     ),
-    case("skill", "invalid_arguments", r#"{}"#, "d55bb78493d46eba"),
+    case("skill", "invalid_arguments", r#"{}"#, "664283a8930e1424"),
     case(
         "search_tool_functions",
         "valid",
@@ -175,13 +175,13 @@ const UNIFIED: &[Case] = &[
         "search_tool_functions",
         "tool_error",
         r#"{"mode":"details","functionNames":["nosuch"]}"#,
-        "55a563c4f51e0de8",
+        "768f46d6870e9fd1",
     ),
     case(
         "search_tool_functions",
         "invalid_arguments",
         r#"{"mode":"bogus"}"#,
-        "6736229b7b60b696",
+        "b4bb833a4927b36b",
     ),
     case(
         "run_typescript",
@@ -205,7 +205,7 @@ const UNIFIED: &[Case] = &[
         "no_such_tool",
         "unknown_tool",
         r#"{"x":1}"#,
-        "ea58407fc7d04269",
+        "03e1df63c5e409a0",
     ),
 ];
 
@@ -484,6 +484,7 @@ pub fn normalize(world: &World, tool: &str, legacy: bool, message: &str) -> Stri
         "run_typescript" => without_stack_frames(&text),
         // `docs/parity.md` ledgers the two guidance lines that follow the base
         // directory as this port's own wording.
+        "skill" if text.starts_with("{\"result\":{\"type\":\"error\"") => unified_error(&text),
         "skill" => {
             let mut lines = Vec::new();
             let mut skip = 0;
@@ -502,9 +503,57 @@ pub fn normalize(world: &World, tool: &str, legacy: bool, message: &str) -> Stri
         // Best-match scores are computed over description prose, which the
         // licensing boundary keeps different; the candidates found compare.
         "search_tool_functions" if text.starts_with("---\nmode: best_match") => best_match(&text),
+        "search_tool_functions" if text.starts_with("---\nmode: details") => details(&text),
         _ if legacy => legacy_error(tool, &text),
-        _ => text,
+        _ => unified_error(&text),
     }
+}
+
+/// A Unified Harness tool error keeps its name and the values its message
+/// ends on, not its sentence: `docs/parity.md` ledgers every sentence the
+/// unified core writes as this port's own ("The Unified Harness's own
+/// prose"). What follows the message's last `": "` is the value it reports (a
+/// schema violation, a path, the names on offer), compared as it stands.
+fn unified_error(text: &str) -> String {
+    let Ok(mut message) = serde_json::from_str::<Value>(text) else {
+        return text.to_owned();
+    };
+    let Some(error) = message
+        .pointer_mut("/result/error")
+        .and_then(Value::as_object_mut)
+    else {
+        return text.to_owned();
+    };
+    if let Some(Value::String(sentence)) = error.get_mut("message") {
+        *sentence = match sentence.rsplit_once(": ") {
+            Some((_, value)) => format!("<authored>: {value}"),
+            None => "<authored>".to_owned(),
+        };
+    }
+    message.to_string()
+}
+
+/// A `details` answer keeps its front matter, its headings and the value each
+/// list item ends on: its sentences are the unified core's own prose.
+fn details(text: &str) -> String {
+    let mut sections = text.splitn(3, "---\n");
+    let front = sections.nth(1).unwrap_or_default();
+    let body = sections.next().unwrap_or_default();
+    let kept: Vec<String> = body
+        .lines()
+        .filter_map(|line| {
+            if line.starts_with('#') {
+                Some(line.to_owned())
+            } else {
+                let item = line.strip_prefix("- ")?;
+                Some(match item.rsplit_once(": ") {
+                    Some((_, value)) => format!("- <authored>: {value}"),
+                    None => "- <authored>".to_owned(),
+                })
+            }
+        })
+        .collect();
+    format!("{front}{}", kept.join("\n"))
 }
 
 /// A `run_typescript` failure keeps the first line of its stack: the frames

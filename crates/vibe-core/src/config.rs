@@ -483,10 +483,10 @@ impl LayeredConfig {
     /// Installs the active agent profile's overrides, without the fields that
     /// route credentials.
     ///
-    /// Reference `AgentProfileLayer._strip_protected`: the account call sends
-    /// the API key to `console_base_url` and Teleport sends it to
-    /// `vibe_code_sessions_base_url`, so a profile shipped by an untrusted
-    /// checkout could otherwise redirect the key to a host of its choosing.
+    /// Reference `AgentProfileLayer._strip_protected`: the API key travels to
+    /// `console_base_url` for account lookups and to
+    /// `vibe_code_sessions_base_url` for Teleport, so an untrusted checkout's
+    /// profile could otherwise point the key at any host it likes.
     #[must_use]
     ///
     /// The reference also writes a log line naming what it dropped; this crate
