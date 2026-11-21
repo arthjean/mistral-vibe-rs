@@ -12,6 +12,14 @@
   descriptions in this project's own sentences, each keeping the cause, the
   values and the limits it reports.
 
+- A Unified Harness `process.stop`, `process.output`, `process.list` or
+  `process.write` that sees a background process end, and
+  `session/backgroundProcess/stop` and `session/backgroundProcess/output`,
+  answer only once the session has published that end, as the reference
+  does. The `session/snapshot` listing the ended process therefore always
+  comes before the call's `history/entryUpdated`, where a busy host used to
+  swap them.
+
 - `session/start`, `session/resume`, `session/continue` and `session/fork`
   refuse an agent configuration whose `system_prompt` is empty or only
   whitespace with an invalid-parameters error, as the v3.1.0 reference does.

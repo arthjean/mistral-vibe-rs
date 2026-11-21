@@ -17,6 +17,9 @@ const RETAINED: usize = 64 * 1024 * 1024;
 const TERMINATION_WAIT: Duration = Duration::from_secs(2);
 /// How often a waiting read looks again.
 const POLL: Duration = Duration::from_millis(250);
+/// The most a call waits for an end it saw to be published, should the
+/// session's publication stall.
+const PUBLICATION_WAIT: Duration = Duration::from_secs(2);
 
 /// What a process has written so far.
 #[derive(Default)]
@@ -47,6 +50,9 @@ pub(super) struct Lifecycle {
     pub(super) exit_code: Option<i64>,
     /// A stop is under way: an exit from now on counts as stopped.
     pub(super) stopping: bool,
+    /// The process has ended and the session is publishing that end: a call
+    /// that saw the end answers only once this clears.
+    pub(super) publishing_end: bool,
 }
 
 /// One process.
@@ -129,6 +135,32 @@ impl Process {
             directory.join("output-state.json"),
             format!("{}\n", serde_json::to_string(&state).unwrap_or_default()),
         );
+    }
+
+    /// Records that the end is published (or held, see
+    /// `ProcessManager::acknowledge_start`) and wakes the calls waiting on it.
+    pub(super) fn end_published(&self) {
+        lock(&self.lifecycle).publishing_end = false;
+        self.changed.notify_all();
+    }
+
+    /// Reference `_wait_for_terminal_updates` for one process: once the
+    /// process has ended, waits until the session has published that end,
+    /// so a call's result never precedes the snapshot of the end it saw.
+    pub(super) fn await_end_published(&self) {
+        let deadline = Instant::now() + PUBLICATION_WAIT;
+        let mut lifecycle = lock(&self.lifecycle);
+        while lifecycle.publishing_end {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return;
+            }
+            lifecycle = self
+                .changed
+                .wait_timeout(lifecycle, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
     }
 
     /// Waits until the process ends or `wait` passes.
